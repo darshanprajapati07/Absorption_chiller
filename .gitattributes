@@ -1,0 +1,19 @@
+# Line endings: normalise text files, keep binaries untouched
+* text=auto
+*.m        text diff=matlab
+*.py       text diff=python
+*.md       text
+*.csv      text
+*.json     text
+*.html     text
+*.js       text
+*.apw      binary
+*.xlsx     binary
+*.mat      binary
+*.pt       binary
+*.png      binary
+*.jpg      binary
+
+# Large generated datasets are stored with Git LFS (GitHub rejects files > 100 MB)
+Transient/output/transient_dataset.csv filter=lfs diff=lfs merge=lfs -text
+Transient/output/transient_dataset_all.mat filter=lfs diff=lfs merge=lfs -text

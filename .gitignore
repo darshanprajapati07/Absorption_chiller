@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# MATLAB autosave / temp
+*.asv
+*.m~
+slprj/
+
+# Aspen Plus temporary and backup files (keep absorption.apw)
+*.bkp~
+*.his
+*.appdf
+_*.tmp
+
+# Office lock files
+~$*
+
+# OS / editor
+Thumbs.db
+desktop.ini
+.DS_Store
+.vscode/
+.idea/
+
+# Local tool configuration (Claude Code preview server)
+.claude/
