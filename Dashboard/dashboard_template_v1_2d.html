@@ -1,0 +1,746 @@
+<title>LiBr Chiller Digital Twin</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: plant-HMI. Sticky header with view tabs; live view = control rail + (KPI strip, process schematic, trends);
+   colors of hot / cooling / chilled water and LiBr solution are process colors used consistently in schematic and charts. */
+:root {
+  --bg: #eef1f4; --panel: #ffffff; --panel-2: #f6f8fa; --ink: #131d27; --ink-2: #46535f; --muted: #75828e;
+  --line: #d9dfe5; --line-2: #c3ccd5; --accent: #1f5fbf; --accent-ink: #ffffff; --accent-soft: #e3ecf9;
+  --hot: #d0532a; --cool: #138f86; --chill: #2a78d6; --sol: #a5752a; --vap: #8a97a6; --ref: #5aa3e6;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+  --good: #1b8a4c; --good-soft: #e1f3e8; --warn: #b57700; --warn-soft: #fbf0d9; --bad: #c93535; --bad-soft: #fbe4e4;
+  --shadow: 0 1px 2px rgba(19, 29, 39, .06), 0 2px 8px rgba(19, 29, 39, .04);
+  --f-display: "IBM Plex Sans Condensed", "Arial Narrow", "Roboto Condensed", system-ui, sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Consolas, monospace;
+  --r: 8px;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0e141a; --panel: #151d25; --panel-2: #1a242e; --ink: #e6ecf1; --ink-2: #a8b5c1; --muted: #7d8b98;
+  --line: #24303b; --line-2: #33414e; --accent: #5b93e8; --accent-ink: #0b1218; --accent-soft: #1b2d45;
+  --hot: #e8703f; --cool: #2bb3a5; --chill: #4b93ea; --sol: #c9994f; --vap: #7f8c99; --ref: #6fb1ee;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  --good: #3fb874; --good-soft: #15301f; --warn: #e0a32e; --warn-soft: #33270f; --bad: #ec6464; --bad-soft: #3a1a1a;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3); color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #0e141a; --panel: #151d25; --panel-2: #1a242e; --ink: #e6ecf1; --ink-2: #a8b5c1; --muted: #7d8b98;
+  --line: #24303b; --line-2: #33414e; --accent: #5b93e8; --accent-ink: #0b1218; --accent-soft: #1b2d45;
+  --hot: #e8703f; --cool: #2bb3a5; --chill: #4b93ea; --sol: #c9994f; --vap: #7f8c99; --ref: #6fb1ee;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  --good: #3fb874; --good-soft: #15301f; --warn: #e0a32e; --warn-soft: #33270f; --bad: #ec6464; --bad-soft: #3a1a1a;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3); color-scheme: dark; }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-body); font-size: 14px; line-height: 1.45; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--panel); }
+h1, h2, h3 { font-family: var(--f-display); margin: 0; text-wrap: balance; letter-spacing: .01em; }
+.num, .mono { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.wrap { max-width: 1440px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.eyebrow { font-family: var(--f-display); font-size: 11.5px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
+
+/* header */
+header.top { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 9; background: var(--panel); border-bottom: 1px solid var(--line); }
+.top .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; padding-block: 10px; }
+.brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.brand svg { flex: none; }
+.brand h1 { font-size: 19px; font-weight: 700; line-height: 1.1; }
+.brand p { margin: 0; font-size: 12px; color: var(--muted); }
+nav.tabs { display: flex; gap: 2px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 7px; padding: 3px; }
+nav.tabs a { font-family: var(--f-display); font-weight: 600; font-size: 13.5px; color: var(--ink-2); text-decoration: none; padding: 5px 12px; border-radius: 5px; }
+nav.tabs a[aria-current="page"] { background: var(--panel); color: var(--ink); box-shadow: var(--shadow); }
+nav.tabs a:focus-visible, button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.status { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); color: var(--ink-2); white-space: nowrap; }
+.pill i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; display: inline-block; }
+.pill.good { color: var(--good); background: var(--good-soft); border-color: transparent; }
+.pill.warn { color: var(--warn); background: var(--warn-soft); border-color: transparent; }
+.pill.bad { color: var(--bad); background: var(--bad-soft); border-color: transparent; }
+.pill.run i { animation: blink 1.6s infinite; }
+@keyframes blink { 50% { opacity: .25; } }
+
+main { padding-block: 18px 40px; }
+section.view { display: grid; gap: 16px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); min-width: 0; }
+.panel > .hd { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 12px 16px 0; }
+.panel > .hd h2 { font-size: 15px; font-weight: 600; }
+.panel > .hd .note { font-size: 12px; color: var(--muted); }
+.panel > .bd { padding: 12px 16px 16px; }
+
+/* live layout */
+.live { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; align-items: start; }
+.rail { display: grid; gap: 16px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 74px); }
+.mainc { display: grid; gap: 16px; min-width: 0; }
+@media (max-width: 1020px) { .live { grid-template-columns: minmax(0, 1fr); } .rail { position: static; } }
+
+.ctl-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+select, button { font: inherit; color: var(--ink); }
+select { width: 100%; padding: 7px 8px; border: 1px solid var(--line-2); border-radius: 6px; background: var(--panel); }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 12px; border-radius: 6px; border: 1px solid var(--line-2); background: var(--panel); font-weight: 600; font-size: 13px; cursor: pointer; }
+.btn:hover { background: var(--panel-2); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); min-width: 92px; }
+.btn.primary:hover { filter: brightness(1.07); }
+.seg { display: inline-flex; border: 1px solid var(--line-2); border-radius: 6px; overflow: hidden; }
+.seg button { border: 0; background: var(--panel); padding: 6px 9px; font-size: 12px; font-weight: 600; cursor: pointer; color: var(--ink-2); }
+.seg button + button { border-left: 1px solid var(--line-2); }
+.seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+.scn-desc { font-size: 12.5px; color: var(--ink-2); margin: 8px 0 0; }
+.clock { display: flex; justify-content: space-between; align-items: baseline; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.clock .num { font-size: 22px; font-weight: 500; }
+
+.slider { display: grid; gap: 3px; padding: 9px 0; border-top: 1px solid var(--line); }
+.slider:first-child { border-top: 0; padding-top: 0; }
+.slider .lab { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
+.slider .lab span:first-child { font-size: 13px; font-weight: 500; display: inline-flex; align-items: center; gap: 6px; }
+.slider .lab .num { font-size: 13px; }
+.slider .lab .num small { color: var(--muted); font-family: var(--f-body); }
+.sw { width: 9px; height: 9px; border-radius: 2px; display: inline-block; }
+.slider .rng { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+input[type=range] { width: 100%; accent-color: var(--accent); margin: 2px 0; }
+
+/* KPI tiles */
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(165px, 1fr)); gap: 12px; }
+.kpi { padding: 12px 14px 10px; display: grid; gap: 2px; }
+.kpi .v { display: flex; align-items: baseline; gap: 5px; }
+.kpi .v .num { font-size: 26px; font-weight: 500; letter-spacing: -.01em; }
+.kpi .v .u { font-size: 12.5px; color: var(--muted); }
+.kpi .sub { font-size: 12px; color: var(--ink-2); display: flex; justify-content: space-between; gap: 6px; flex-wrap: wrap; align-items: center; }
+.kpi canvas { width: 100%; height: 30px; display: block; margin-top: 4px; }
+.chip { font-size: 11px; font-weight: 600; padding: 1px 7px; border-radius: 999px; }
+.chip.good { color: var(--good); background: var(--good-soft); } .chip.warn { color: var(--warn); background: var(--warn-soft); } .chip.bad { color: var(--bad); background: var(--bad-soft); }
+
+/* schematic */
+.schem { overflow-x: auto; }
+.schem svg { width: 100%; min-width: 640px; height: auto; display: block; }
+.schem text { font-family: var(--f-mono); font-size: 13px; fill: var(--ink); }
+.schem .vname { font-family: var(--f-display); font-weight: 700; font-size: 14px; letter-spacing: .06em; fill: var(--ink); }
+.schem .lbl { font-family: var(--f-body); font-size: 11.5px; fill: var(--muted); }
+.schem .vessel { fill: var(--panel-2); stroke: var(--line-2); stroke-width: 1.5; }
+.schem .pipe { fill: none; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+.schem .flow { fill: none; stroke-width: 4; stroke-linecap: round; stroke-dasharray: 2 14; stroke: var(--panel); opacity: .85; animation: flow 1.2s linear infinite; }
+@keyframes flow { to { stroke-dashoffset: -32; } }
+@media (prefers-reduced-motion: reduce) { .schem .flow { animation: none; } .pill.run i { animation: none; } }
+.paused .schem .flow { animation-play-state: paused; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 12px; color: var(--ink-2); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 18px; height: 4px; border-radius: 2px; display: inline-block; }
+
+/* charts */
+.charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 760px) { .charts { grid-template-columns: minmax(0, 1fr); } }
+.chart { position: relative; }
+.chart canvas { width: 100%; display: block; touch-action: pan-y; }
+.tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--line-2); border-radius: 6px; padding: 6px 8px; font-size: 12px; box-shadow: var(--shadow); white-space: nowrap; z-index: 2; }
+.tip b { font-family: var(--f-mono); font-weight: 500; }
+.tip .row { display: flex; align-items: center; gap: 6px; }
+.tip .row i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+
+/* tables */
+.tbl-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+th { font-family: var(--f-display); font-weight: 600; font-size: 12px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
+td.n, th.n { text-align: right; font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+tr.grp td { font-family: var(--f-display); font-weight: 600; color: var(--ink-2); background: var(--panel-2); font-size: 12px; letter-spacing: .05em; text-transform: uppercase; }
+#tbl-energy td { white-space: normal; }
+.readout { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 16px; }
+@media (max-width: 900px) { .readout { grid-template-columns: minmax(0, 1fr); } }
+
+/* validation */
+.val-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 16px; }
+@media (max-width: 960px) { .val-top { grid-template-columns: minmax(0, 1fr); } }
+.bars { display: grid; gap: 10px; }
+.bar { display: grid; grid-template-columns: 170px minmax(0, 1fr) 64px; gap: 10px; align-items: center; font-size: 13px; }
+.bar .track { height: 18px; background: var(--panel-2); border-radius: 4px; position: relative; }
+.bar .fill { position: absolute; inset: 0 auto 0 0; border-radius: 0 4px 4px 0; background: var(--line-2); }
+.bar.best .fill { background: var(--accent); }
+.bar .num { text-align: right; }
+@media (max-width: 520px) { .bar { grid-template-columns: 110px minmax(0, 1fr) 54px; font-size: 12px; } }
+.hero-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.hero-stats .s { padding: 12px 14px; }
+.hero-stats .s .num { font-size: 28px; font-weight: 500; display: block; }
+.hero-stats .s span:last-child { font-size: 12.5px; color: var(--ink-2); }
+.replay-ctl { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.replay-ctl label { display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
+.rstats { display: flex; gap: 8px 22px; flex-wrap: wrap; font-size: 13px; color: var(--ink-2); }
+.rstats b { font-family: var(--f-mono); font-weight: 500; color: var(--ink); }
+
+/* details */
+.prose { max-width: 70ch; color: var(--ink-2); }
+.prose p { margin: 0 0 10px; }
+.pipeline { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; counter-reset: st; }
+.pipeline .st { padding: 14px; display: grid; gap: 4px; align-content: start; }
+.pipeline .st h3 { font-size: 15px; font-weight: 600; display: flex; gap: 8px; align-items: baseline; }
+.pipeline .st h3::before { counter-increment: st; content: counter(st); font-family: var(--f-mono); font-size: 12px; color: var(--accent); }
+.pipeline .st p { margin: 0; font-size: 12.5px; color: var(--ink-2); }
+.pipeline .st .num { font-size: 18px; color: var(--ink); }
+.two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 860px) { .two { grid-template-columns: minmax(0, 1fr); } }
+footer { padding-block: 0 30px; font-size: 12px; color: var(--muted); }
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <div class="brand">
+      <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><rect x="1" y="1" width="32" height="32" rx="7" fill="var(--accent)"/><path d="M9 12h16M9 22h16" stroke="var(--accent-ink)" stroke-width="2.4" stroke-linecap="round"/><path d="M12 12v10M22 12v10" stroke="var(--accent-ink)" stroke-width="2.4" stroke-linecap="round" opacity=".55"/><circle cx="17" cy="17" r="2.6" fill="var(--accent-ink)"/></svg>
+      <div><h1>LiBr Chiller Digital Twin</h1><p>Single-effect H₂O–LiBr absorption chiller · LSTM ensemble running in your browser</p></div>
+    </div>
+    <nav class="tabs" aria-label="Views">
+      <a href="#live" data-view="live">Live twin</a>
+      <a href="#validation" data-view="validation">Model validation</a>
+      <a href="#details" data-view="details">Plant &amp; model</a>
+    </nav>
+    <div class="status">
+      <span class="pill run good" id="st-run"><i></i><span>Running</span></span>
+      <span class="pill" id="st-cryst"><i></i><span>Crystallisation</span></span>
+      <span class="pill" id="st-freeze"><i></i><span>Freezing</span></span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+<!-- ============================================================ LIVE -->
+<section class="view" id="view-live">
+  <div class="live">
+    <aside class="rail">
+      <div class="panel">
+        <div class="hd"><h2>Operating scenario</h2></div>
+        <div class="bd">
+          <label class="eyebrow" for="scn">Scenario</label>
+          <select id="scn"></select>
+          <p class="scn-desc" id="scn-desc"></p>
+          <div class="ctl-row" style="margin-top:12px">
+            <button class="btn primary" id="btn-play" type="button">Pause</button>
+            <button class="btn" id="btn-reset" type="button">Restart</button>
+            <div class="seg" role="group" aria-label="Simulation speed" id="speed">
+              <button type="button" data-s="1" aria-pressed="false">1×</button>
+              <button type="button" data-s="5" aria-pressed="true">5×</button>
+              <button type="button" data-s="20" aria-pressed="false">20×</button>
+            </div>
+          </div>
+          <div class="clock"><span class="eyebrow">Plant time</span><span class="num" id="clock">00:00</span></div>
+          <p class="scn-desc" style="margin-top:4px">1× = one plant minute per second. Every step is a 60 s prediction by the AI.</p>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="hd"><h2>External inputs</h2><span class="note">drag to operate the plant</span></div>
+        <div class="bd" id="sliders"></div>
+      </div>
+    </aside>
+
+    <div class="mainc">
+      <div class="kpis" id="kpis"></div>
+
+      <div class="panel">
+        <div class="hd"><h2>Process schematic</h2><span class="note">live AI predictions · ensemble of 3 LSTMs</span></div>
+        <div class="bd">
+          <div class="schem" id="schem"></div>
+          <div class="legend" style="margin-top:10px">
+            <span><i style="background:var(--hot)"></i>Hot water</span>
+            <span><i style="background:var(--cool)"></i>Cooling water</span>
+            <span><i style="background:var(--chill)"></i>Chilled water</span>
+            <span><i style="background:var(--sol)"></i>LiBr solution</span>
+            <span><i style="background:var(--ref)"></i>Liquid refrigerant</span>
+            <span><i style="background:var(--vap)"></i>Water vapour</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="charts">
+        <div class="panel"><div class="hd"><h2>Heat duties</h2><span class="note">kW · last 6 h</span></div><div class="bd"><div class="chart" id="ch-q"></div></div></div>
+        <div class="panel"><div class="hd"><h2>Chilled water and evaporator</h2><span class="note">°C · band = ensemble spread</span></div><div class="bd"><div class="chart" id="ch-t"></div></div></div>
+        <div class="panel"><div class="hd"><h2>COP, 30-min energy average</h2><span class="note">ΣQ<sub>evap</sub> / ΣQ<sub>gen</sub></span></div><div class="bd"><div class="chart" id="ch-cop"></div></div></div>
+        <div class="panel"><div class="hd"><h2>Solution concentration</h2><span class="note">wt% LiBr · crystallisation limit 64 wt%</span></div><div class="bd"><div class="chart" id="ch-x"></div></div></div>
+      </div>
+
+      <div class="readout">
+        <div class="panel"><div class="hd"><h2>All predicted outputs</h2><span class="note">mean of 3 models · ± half the spread</span></div>
+          <div class="bd tbl-wrap"><table id="tbl-out"><thead><tr><th>Output</th><th class="n">Value</th><th>Unit</th><th class="n">± spread</th><th class="n">Test RMSE</th></tr></thead><tbody></tbody></table></div></div>
+        <div class="panel"><div class="hd"><h2>Energy check</h2><span class="note">first law on predicted duties</span></div>
+          <div class="bd">
+            <table id="tbl-energy"><tbody></tbody></table>
+            <p class="scn-desc" style="margin-top:10px">At steady state, heat in (generator + evaporator) equals heat out (condenser + absorber); the Aspen base case closes to 0.04 %. During transients the gap is the heat being stored in, or released from, the vessel metal and solution. The AI was never told this law, so a small steady-state gap is evidence it learned the physics.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ VALIDATION -->
+<section class="view" id="view-validation" hidden>
+  <div class="hero-stats" id="val-hero"></div>
+  <div class="val-top">
+    <div class="panel"><div class="hd"><h2>Model comparison</h2><span class="note">mean NRMSE over 17 outputs · lower is better</span></div><div class="bd"><div class="bars" id="bars"></div>
+      <p class="scn-desc" style="margin-top:12px">All four models were trained on the same 134 runs and scored on the same 34 unseen test runs. A model without memory cannot follow the 18–47 min time constants of the chiller, which is why the static model fails on transients.</p></div></div>
+    <div class="panel"><div class="hd"><h2>Accuracy per output</h2><span class="note">LSTM ensemble · 34 unseen test runs</span></div>
+      <div class="bd tbl-wrap"><table id="tbl-met"><thead><tr><th>Output</th><th>Unit</th><th class="n">R²</th><th class="n">RMSE</th><th class="n">MAE</th><th class="n">NRMSE %</th></tr></thead><tbody></tbody></table></div></div>
+  </div>
+  <div class="panel">
+    <div class="hd"><h2>Replay an unseen test run</h2><span class="note">the AI runs live on the run's inputs; black = physics simulation, blue = AI</span></div>
+    <div class="bd" style="display:grid;gap:12px">
+      <div class="replay-ctl">
+        <label for="rp-run">Test run<select id="rp-run"></select></label>
+        <label for="rp-out">Output<select id="rp-out"></select></label>
+      </div>
+      <div class="rstats" id="rp-stats"></div>
+      <div class="chart" id="ch-rp"></div>
+      <div class="eyebrow">Inputs driving this run</div>
+      <div class="chart" id="ch-rp-in"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ DETAILS -->
+<section class="view" id="view-details" hidden>
+  <div class="panel"><div class="hd"><h2>How this twin was built</h2></div><div class="bd"><div class="pipeline">
+    <div class="st panel"><h3>Aspen Plus steady state</h3><p>ELECNRTL, true-species H₂O–LiBr flowsheet. Energy balance fixed to a 0.04 % residual.</p><p><span class="num">COP 0.608</span></p></div>
+    <div class="st panel"><h3>Sensitivity sweep</h3><p>SENS-1 over generator, condenser and evaporator conditions; 163 physically valid cases.</p><p><span class="num">163 cases</span></p></div>
+    <div class="st panel"><h3>MATLAB dynamic model</h3><p>9 ODEs, lumped parameters (Kohlenbach &amp; Ziegler 2008), calibrated to the Aspen base case; energy error ≤ 0.032 %.</p><p><span class="num">197 runs</span></p></div>
+    <div class="st panel"><h3>LSTM ensemble</h3><p>Learns all 16 outputs from the 7 external inputs alone; 3 networks averaged.</p><p><span class="num" id="d-r2"></span></p></div>
+    <div class="st panel"><h3>This dashboard</h3><p>Weights exported from PyTorch and run step by step in JavaScript. Same results as Python to within 0.002 kW.</p><p><span class="num">offline</span></p></div>
+  </div></div></div>
+
+  <div class="two">
+    <div class="panel"><div class="hd"><h2>Design point</h2><span class="note">Aspen Plus base case and external water circuits</span></div>
+      <div class="bd tbl-wrap"><table><tbody>
+        <tr class="grp"><td colspan="2">Internal state (Aspen)</td></tr>
+        <tr><td>Generator temperature</td><td class="n">89.89 °C</td></tr>
+        <tr><td>Condenser temperature</td><td class="n">46.14 °C</td></tr>
+        <tr><td>Evaporator temperature</td><td class="n">1.74 °C</td></tr>
+        <tr><td>Absorber outlet temperature</td><td class="n">33.30 °C</td></tr>
+        <tr><td>Weak / strong solution</td><td class="n">57.40 / 59.49 wt%</td></tr>
+        <tr><td>Solution pump flow</td><td class="n">3600 kg/h</td></tr>
+        <tr><td>Refrigerant flow</td><td class="n">126.35 kg/h</td></tr>
+        <tr><td>Q<sub>gen</sub> / Q<sub>evap</sub></td><td class="n">133.3 / 81.1 kW</td></tr>
+        <tr><td>COP (Aspen / dynamic model)</td><td class="n">0.608 / 0.589</td></tr>
+        <tr class="grp"><td colspan="2">External water (design choice)</td></tr>
+        <tr><td>Hot water in, drop</td><td class="n">105 °C, 8 K</td></tr>
+        <tr><td>Cooling water in (absorber → condenser)</td><td class="n">27 °C</td></tr>
+        <tr><td>Chilled water in → out</td><td class="n">12 → 7 °C</td></tr>
+        <tr class="grp"><td colspan="2">Thermal masses (assumed)</td></tr>
+        <tr><td>Generator / condenser / evaporator / absorber</td><td class="n">800 / 400 / 600 / 800 kJ/K</td></tr>
+        <tr><td>Solution hold-up generator / absorber</td><td class="n">120 / 200 kg</td></tr>
+      </tbody></table></div></div>
+    <div style="display:grid;gap:16px;align-content:start">
+      <div class="panel"><div class="hd"><h2>AI model card</h2></div><div class="bd tbl-wrap"><table><tbody id="tbl-card"></tbody></table></div></div>
+      <div class="panel"><div class="hd"><h2>Valid operating envelope</h2><span class="note">input ranges seen in training</span></div><div class="bd tbl-wrap"><table id="tbl-env"><thead><tr><th>Input</th><th class="n">Min</th><th class="n">Design</th><th class="n">Max</th></tr></thead><tbody></tbody></table></div></div>
+    </div>
+  </div>
+  <div class="panel"><div class="hd"><h2>Limits of this prototype</h2></div><div class="bd prose">
+    <p>The AI reproduces the calibrated MATLAB dynamic model, not measurements from a real chiller. Its accuracy against a real plant is bounded by how well that model, its assumed thermal masses and its ε-NTU heat-transfer correlations, represent the plant.</p>
+    <p>Predictions are trusted only inside the envelope above. The sliders are limited to it for that reason. Operation with x<sub>strong</sub> above 64 wt% (crystallisation) or evaporator temperature below 0 °C (freezing) was excluded from the training data, so the model flags those regions but cannot predict behaviour inside them.</p>
+    <p>COP_avg30 is computed from the predicted heat duties over a trailing 30 minutes, not fitted separately. Instantaneous COP is not shown because it spikes during transients when generator heat goes into storage.</p>
+  </div></div>
+</section>
+</main>
+<footer class="wrap">7th-semester Chemical Engineering project, IIT Jodhpur · AI for transient behaviour prediction in absorption chillers · Aspen Plus → MATLAB → PyTorch → browser</footer>
+
+<script>/*__ENGINE__*/</script>
+<script>
+const D = /*__DATA__*/null;
+const $ = (s, el = document) => el.querySelector(s);
+const NAMES = {
+  T_hw_in_C: ['Hot water in', '°C', 'hot'], m_hw_kg_s: ['Hot water flow', 'kg/s', 'hot'],
+  T_cw_in_C: ['Cooling water in', '°C', 'cool'], m_cw_kg_s: ['Cooling water flow', 'kg/s', 'cool'],
+  T_chw_in_C: ['Chilled water return', '°C', 'chill'], m_chw_kg_s: ['Chilled water flow', 'kg/s', 'chill'],
+  m_pump_kg_s: ['Solution pump flow', 'kg/s', 'sol'],
+  Q_evap_kW: ['Cooling capacity Q_evap', 'kW'], T_chw_out_C: ['Chilled water supply', '°C'], Q_gen_kW: ['Generator heat Q_gen', 'kW'],
+  Q_cond_kW: ['Condenser heat Q_cond', 'kW'], Q_abs_kW: ['Absorber heat Q_abs', 'kW'], T_hw_out_C: ['Hot water out', '°C'],
+  T_cw_out_C: ['Cooling water out', '°C'], T_gen_C: ['Generator temperature', '°C'], T_cond_C: ['Condenser temperature', '°C'],
+  T_evap_C: ['Evaporator temperature', '°C'], T_abs_C: ['Absorber temperature', '°C'], x_strong_wt: ['Strong solution', 'wt%'],
+  x_weak_wt: ['Weak solution', 'wt%'], P_high_kPa: ['High-side pressure', 'kPa'], P_low_kPa: ['Low-side pressure', 'kPa'],
+  m_ref_gen_kg_s: ['Refrigerant flow', 'kg/s'], COP_avg30: ['COP (30-min average)', '–'],
+};
+const DEC = { kW: 1, '°C': 2, 'wt%': 2, kPa: 3, 'kg/s': 4, '–': 3 };
+const T = Object.fromEntries(D.targets.map((n, i) => [n, i]));
+const fmt = (v, d) => (v == null || !isFinite(v)) ? '–' : v.toFixed(d);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const X_CRYST = 64, T_FREEZE = 0, COPW = 30, HIST = 360;
+
+/* ---------------------------------------------------------------- charts */
+function niceTicks(lo, hi, n = 5) {
+  const span = hi - lo || 1, step0 = span / n, mag = Math.pow(10, Math.floor(Math.log10(step0)));
+  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => s >= step0) || 10 * mag;
+  const out = []; for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(+v.toFixed(10));
+  return { ticks: out, step };
+}
+function hhmm(min) { const m = Math.round(min); return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); }
+class LineChart {
+  constructor(el, o = {}) {
+    this.el = el; this.o = Object.assign({ height: 220, dec: 1, unit: '', xfmt: hhmm, endLabels: true }, o);
+    this.cv = document.createElement('canvas'); this.cv.style.height = this.o.height + 'px'; el.appendChild(this.cv);
+    this.tip = document.createElement('div'); this.tip.className = 'tip'; this.tip.hidden = true; el.appendChild(this.tip);
+    this.hover = null; this.x = []; this.series = [];
+    const move = e => { const r = this.cv.getBoundingClientRect(); this.hx = e.clientX - r.left; this.draw(); };
+    this.cv.addEventListener('pointermove', move); this.cv.addEventListener('pointerdown', move);
+    this.cv.addEventListener('pointerleave', () => { this.hx = null; this.draw(); });
+    new ResizeObserver(() => this.draw()).observe(el);
+  }
+  set(x, series, extra = {}) { this.x = x; this.series = series; this.extra = extra; this.draw(); }
+  draw() {
+    const cv = this.cv, w = this.el.clientWidth, h = this.o.height, dpr = window.devicePixelRatio || 1;
+    if (!w) return;
+    if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+    const c = cv.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, w, h);
+    const x = this.x, S = this.series; if (!x.length) return;
+    const ink2 = css('--ink-2'), muted = css('--muted'), line = css('--line'), font = css('--f-mono');
+    let lo = Infinity, hi = -Infinity;
+    S.forEach(s => { s.data.forEach(v => { if (v < lo) lo = v; if (v > hi) hi = v; });
+      if (s.band) { s.band[0].forEach(v => lo = Math.min(lo, v)); s.band[1].forEach(v => hi = Math.max(hi, v)); } });
+    (this.extra.refs || []).forEach(r => { if (r.include) { lo = Math.min(lo, r.v); hi = Math.max(hi, r.v); } });
+    if (this.o.minSpan && hi - lo < this.o.minSpan) { const m = (hi + lo) / 2; lo = m - this.o.minSpan / 2; hi = m + this.o.minSpan / 2; }
+    const pad = (hi - lo) * 0.08 || 1; lo -= pad; hi += pad;
+    const { ticks, step } = niceTicks(lo, hi, 4);
+    const tdec = Math.max(0, -Math.floor(Math.log10(step) + 1e-9));
+    c.font = `11px ${font}`;
+    const yl = Math.max(...ticks.map(t => c.measureText(t.toFixed(tdec)).width)) + 10;
+    const endW = this.o.endLabels && S.length > 1 ? Math.max(...S.map(s => c.measureText(s.short || s.name).width)) + 12 : 8;
+    const L = yl, R = w - Math.max(endW, 20), Tp = 8, B = h - 22;
+    const x0 = x[0], x1 = Math.max(x[x.length - 1], x0 + (this.o.minX || 1));
+    const X = v => L + (v - x0) / (x1 - x0) * (R - L), Y = v => B - (v - lo) / (hi - lo) * (B - Tp);
+    // grid + y ticks
+    c.strokeStyle = line; c.lineWidth = 1; c.fillStyle = muted; c.textAlign = 'right'; c.textBaseline = 'middle';
+    ticks.forEach(t => { const y = Math.round(Y(t)) + .5; c.beginPath(); c.moveTo(L, y); c.lineTo(R, y); c.stroke(); c.fillText(t.toFixed(tdec), L - 6, y); });
+    // x ticks
+    const xt = niceTicks(x0 / 60, x1 / 60, Math.max(2, Math.floor((R - L) / 90)));
+    c.textAlign = 'center'; c.textBaseline = 'top';
+    xt.ticks.forEach(t => { const px = X(t * 60); if (px < L - 1 || px > R + 1) return; c.fillText(this.o.xfmt(t * 60), px, B + 6); });
+    // reference lines
+    (this.extra.refs || []).forEach(r => { if (r.v < lo || r.v > hi) return; const y = Math.round(Y(r.v)) + .5;
+      c.save(); c.setLineDash([4, 4]); c.strokeStyle = css(r.color || '--bad'); c.beginPath(); c.moveTo(L, y); c.lineTo(R, y); c.stroke(); c.restore();
+      c.fillStyle = css(r.color || '--bad'); c.textAlign = 'left'; c.textBaseline = 'bottom'; c.fillText(r.label, L + 4, y - 2); });
+    // bands then lines
+    S.forEach(s => { if (!s.band) return; c.fillStyle = css(s.color); c.globalAlpha = .16; c.beginPath();
+      s.band[1].forEach((v, i) => i ? c.lineTo(X(x[i]), Y(v)) : c.moveTo(X(x[i]), Y(v)));
+      for (let i = x.length - 1; i >= 0; i--) c.lineTo(X(x[i]), Y(s.band[0][i])); c.closePath(); c.fill(); c.globalAlpha = 1; });
+    S.forEach(s => { c.strokeStyle = css(s.color); c.lineWidth = s.width || 2; c.setLineDash(s.dash || []); c.lineJoin = 'round'; c.beginPath();
+      s.data.forEach((v, i) => i ? c.lineTo(X(x[i]), Y(v)) : c.moveTo(X(x[i]), Y(v))); c.stroke(); c.setLineDash([]); });
+    // endpoints + end labels (text in ink, swatch carries identity)
+    const ends = S.map(s => ({ s, y: Y(s.data[s.data.length - 1]) })).sort((a, b) => a.y - b.y);
+    for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 13) ends[i].y = ends[i - 1].y + 13;
+    ends.forEach(e => { const px = X(x[x.length - 1]), py = Y(e.s.data[e.s.data.length - 1]);
+      c.fillStyle = css(e.s.color); c.beginPath(); c.arc(px, py, 3.5, 0, 7); c.fill();
+      c.strokeStyle = css('--panel'); c.lineWidth = 1.5; c.stroke();
+      if (this.o.endLabels && S.length > 1) { c.fillStyle = ink2; c.textAlign = 'left'; c.textBaseline = 'middle'; c.fillText(e.s.short || e.s.name, px + 8, e.y); } });
+    // hover
+    if (this.hx != null && this.hx >= L && this.hx <= R) {
+      const xv = x0 + (this.hx - L) / (R - L) * (x1 - x0); let i = 0, best = Infinity;
+      x.forEach((v, k) => { const d = Math.abs(v - xv); if (d < best) { best = d; i = k; } });
+      const px = X(x[i]); c.strokeStyle = muted; c.lineWidth = 1; c.beginPath(); c.moveTo(px + .5, Tp); c.lineTo(px + .5, B); c.stroke();
+      S.forEach(s => { c.fillStyle = css(s.color); c.beginPath(); c.arc(px, Y(s.data[i]), 4, 0, 7); c.fill(); c.strokeStyle = css('--panel'); c.lineWidth = 2; c.stroke(); });
+      this.tip.innerHTML = `<div style="color:var(--muted);margin-bottom:2px">t = ${this.o.xfmt(x[i])}</div>` + S.map(s =>
+        `<div class="row"><i style="background:var(${s.color})"></i>${s.name} <b>${fmt(s.data[i], s.dec ?? this.o.dec)}</b>${this.o.unit ? ' ' + this.o.unit : ''}</div>`).join('');
+      this.tip.hidden = false; const tw = this.tip.offsetWidth;
+      this.tip.style.left = (px + 12 + tw > w ? Math.max(0, px - tw - 12) : px + 12) + 'px';
+      this.tip.style.top = '6px';
+    } else this.tip.hidden = true;
+  }
+}
+function spark(cv, data, color, refs) {
+  const w = cv.clientWidth, h = cv.clientHeight, dpr = window.devicePixelRatio || 1; if (!w || data.length < 2) return;
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); const c = cv.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  let lo = Math.min(...data), hi = Math.max(...data); if (hi - lo < 1e-9) { lo -= 1; hi += 1; }
+  const X = i => i / (data.length - 1) * (w - 5), Y = v => h - 3 - (v - lo) / (hi - lo) * (h - 6);
+  c.beginPath(); data.forEach((v, i) => i ? c.lineTo(X(i), Y(v)) : c.moveTo(X(i), Y(v)));
+  c.strokeStyle = css(color); c.lineWidth = 1.5; c.stroke();
+  c.lineTo(X(data.length - 1), h); c.lineTo(0, h); c.closePath(); c.globalAlpha = .12; c.fillStyle = css(color); c.fill(); c.globalAlpha = 1;
+  c.beginPath(); c.arc(X(data.length - 1), Y(data[data.length - 1]), 2.5, 0, 7); c.fill();
+}
+
+/* ---------------------------------------------------------------- scenarios */
+const U0 = D.u0.slice(), RNG = D.inputs.map(n => D.input_range[n]);
+const clampU = u => u.map((v, k) => Math.min(RNG[k][1], Math.max(RNG[k][0], v)));
+const ramp = (t, t0, t1, a, b) => t <= t0 ? a : t >= t1 ? b : a + (b - a) * (t - t0) / (t1 - t0);
+const SCN = [
+  { id: 'manual', name: 'Manual operation', desc: 'You control the plant. Move any input and watch the AI predict how the chiller responds over the next hour.' },
+  { id: 'solar', name: 'Solar-driven day (12 h)', desc: 'Hot water from solar collectors rises to 109 °C at noon. Cooling water and chilled-water load follow the ambient temperature.',
+    f: t => { const s = Math.sin(Math.PI * Math.min(t, 720) / 720); const u = U0.slice(); u[0] = 92 + 17 * s; u[2] = 25 + 4 * s; u[4] = 11 + 3 * s; return u; } },
+  { id: 'hwdrop', name: 'Heat source loss: 105 → 90 °C', desc: 'At 00:30 the hot-water supply drops by 15 K, for example when a boiler trips to low fire. Watch capacity fall with an 18-minute time constant.',
+    f: t => { const u = U0.slice(); u[0] = t < 30 ? 105 : 90; return u; } },
+  { id: 'heatwave', name: 'Cooling-tower heat wave: 27 → 32 °C', desc: 'From 00:30 to 01:30 the cooling-water temperature climbs 5 K. Higher absorber temperature weakens absorption and cuts capacity.',
+    f: t => { const u = U0.slice(); u[2] = ramp(t, 30, 90, 27, 31.9); return u; } },
+  { id: 'load', name: 'Load surge: chilled return 12 → 15 °C', desc: 'At 00:30 the building load jumps and the chilled-water return warms by 3 K. The evaporator pressure rises and the chiller delivers more cooling.',
+    f: t => { const u = U0.slice(); u[4] = t < 30 ? 12 : 15; return u; } },
+  { id: 'startup', name: 'Warm start: hot water 80 → 105 °C', desc: 'The plant idles on 80 °C hot water, then the heat source ramps to design between 00:15 and 00:25.',
+    f: t => { const u = U0.slice(); u[0] = ramp(t, 15, 25, 80, 105); return u; } },
+  { id: 'pump', name: 'Solution pump turndown to 85 %', desc: 'At 00:30 the solution pump slows to 85 % of design flow. Less solution circulates, so the strong solution concentrates.',
+    f: t => { const u = U0.slice(); u[6] = t < 30 ? 1.0 : 0.85; return u; } },
+];
+
+/* ---------------------------------------------------------------- live state */
+const twin = new TwinEngine.Twin(D);
+const S = { scn: SCN[1], t: 0, u: U0.slice(), running: true, speed: 5, acc: 0, hist: null };
+function newHist() { return { t: [], y: D.targets.map(() => []), lo: [], hi: [], cop: [], qe: [], qg: [] }; }
+function pushStep(r) {
+  const H = S.hist; H.t.push(S.t); D.targets.forEach((n, j) => H.y[j].push(r.mean[j])); H.lo.push(r.lo); H.hi.push(r.hi);
+  H.qe.push(r.mean[T.Q_evap_kW]); H.qg.push(r.mean[T.Q_gen_kW]);
+  const a = Math.max(0, H.qe.length - COPW); let se = 0, sg = 0; for (let i = a; i < H.qe.length; i++) { se += H.qe[i]; sg += H.qg[i]; }
+  H.cop.push(se / sg);
+  if (H.t.length > HIST + 1) { H.t.shift(); H.y.forEach(a => a.shift()); H.lo.shift(); H.hi.shift(); H.cop.shift(); }
+  if (H.qe.length > COPW) { H.qe.shift(); H.qg.shift(); }
+}
+function restart() {
+  S.t = 0; S.hist = newHist(); S.u = S.scn.f ? clampU(S.scn.f(0)) : S.u.slice();
+  const r = twin.reset(S.u); for (let i = 0; i < COPW; i++) { S.hist.qe.push(r.mean[T.Q_evap_kW]); S.hist.qg.push(r.mean[T.Q_gen_kW]); }
+  S.hist.qe.length = COPW - 1; S.hist.qg.length = COPW - 1; pushStep(r); render();
+}
+function stepOnce() {
+  S.t += 1; if (S.scn.f) S.u = clampU(S.scn.f(S.t));
+  pushStep(twin.step(S.u));
+}
+
+/* ---------------------------------------------------------------- UI: controls */
+const scnSel = $('#scn');
+SCN.forEach(s => scnSel.add(new Option(s.name, s.id)));
+scnSel.value = S.scn.id; $('#scn-desc').textContent = S.scn.desc;
+scnSel.addEventListener('change', () => { S.scn = SCN.find(s => s.id === scnSel.value); $('#scn-desc').textContent = S.scn.desc; if (S.scn.f) restart(); });
+$('#btn-play').addEventListener('click', () => { S.running = !S.running; updRun(); });
+$('#btn-reset').addEventListener('click', () => { if (!S.scn.f) { S.u = U0.slice(); } restart(); });
+$('#speed').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S.speed = +b.dataset.s;
+  $('#speed').querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b)); });
+function updRun() { $('#btn-play').textContent = S.running ? 'Pause' : 'Run'; const p = $('#st-run');
+  p.className = 'pill ' + (S.running ? 'run good' : ''); p.lastElementChild.textContent = S.running ? 'Running' : 'Paused';
+  document.body.classList.toggle('paused', !S.running); }
+
+const sl = $('#sliders'), SL = [];
+D.inputs.forEach((n, k) => {
+  const [lab, unit, col] = NAMES[n], [a, b] = RNG[k], dec = unit === '°C' ? 1 : 2;
+  const div = document.createElement('div'); div.className = 'slider';
+  div.innerHTML = `<div class="lab"><span><i class="sw" style="background:var(--${col})"></i><label for="in-${k}">${lab}</label></span><span class="num"><span id="iv-${k}"></span> <small>${unit}</small></span></div>
+    <input type="range" id="in-${k}" min="${a}" max="${b}" step="${(b - a) / 200}">
+    <div class="rng"><span>${a.toFixed(dec)}</span><span>design ${U0[k].toFixed(dec)}</span><span>${b.toFixed(dec)}</span></div>`;
+  sl.appendChild(div);
+  const inp = div.querySelector('input');
+  inp.addEventListener('input', () => {
+    if (S.scn.f) { S.scn = SCN[0]; scnSel.value = 'manual'; $('#scn-desc').textContent = S.scn.desc; }
+    S.u[k] = +inp.value; $('#iv-' + k).textContent = (+inp.value).toFixed(dec);
+  });
+  SL.push({ inp, out: () => $('#iv-' + k), dec });
+});
+
+/* ---------------------------------------------------------------- UI: KPIs */
+const KPI = [
+  { id: 'qe', label: 'Cooling capacity', unit: 'kW', get: H => H.y[T.Q_evap_kW], dec: 1, color: '--chill', sub: v => `${(v / 3.517).toFixed(1)} TR` },
+  { id: 'cop', label: 'COP, 30-min', unit: '', get: H => H.cop, dec: 3, color: '--accent', sub: () => 'thermal, ΣQe / ΣQg' },
+  { id: 'tchw', label: 'Chilled water supply', unit: '°C', get: H => H.y[T.T_chw_out_C], dec: 2, color: '--chill', sub: v => `${(v - 7) >= 0 ? '+' : ''}${(v - 7).toFixed(2)} K vs 7 °C design` },
+  { id: 'qg', label: 'Heat input', unit: 'kW', get: H => H.y[T.Q_gen_kW], dec: 1, color: '--hot', sub: () => 'from hot water' },
+  { id: 'xs', label: 'Crystallisation margin', unit: 'wt%', get: H => H.y[T.x_strong_wt].map(v => X_CRYST - v), dec: 2, color: '--sol',
+    chip: v => v > 2 ? ['good', 'Safe'] : v > 0.8 ? ['warn', 'Watch'] : ['bad', 'Risk'], sub: v => `x_strong ${(X_CRYST - v).toFixed(2)} wt%` },
+  { id: 'te', label: 'Freezing margin', unit: 'K', get: H => H.y[T.T_evap_C].map(v => v - T_FREEZE), dec: 2, color: '--ref',
+    chip: v => v > 1 ? ['good', 'Safe'] : v > 0.3 ? ['warn', 'Watch'] : ['bad', 'Risk'], sub: v => `T_evap ${v.toFixed(2)} °C` },
+];
+$('#kpis').innerHTML = KPI.map(k => `<div class="panel kpi" id="k-${k.id}"><span class="eyebrow">${k.label}</span>
+  <div class="v"><span class="num">–</span><span class="u">${k.unit}</span></div><div class="sub"><span class="s"></span><span class="chip" hidden></span></div><canvas></canvas></div>`).join('');
+
+/* ---------------------------------------------------------------- UI: schematic */
+$('#schem').innerHTML = `<svg viewBox="0 0 900 500" role="img" aria-label="Absorption chiller process schematic with live values">
+  <defs><marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--muted)"/></marker></defs>
+  <!-- vessels -->
+  <rect class="vessel" x="110" y="40" width="240" height="150" rx="10"/><rect class="vessel" x="550" y="40" width="240" height="150" rx="10"/>
+  <rect class="vessel" x="550" y="310" width="240" height="150" rx="10"/><rect class="vessel" x="110" y="310" width="240" height="150" rx="10"/>
+  <rect x="111" y="160" width="238" height="29" rx="0" fill="var(--sol)" opacity=".22"/><rect x="111" y="430" width="238" height="29" fill="var(--sol)" opacity=".22"/>
+  <rect x="551" y="165" width="238" height="24" fill="var(--ref)" opacity=".22"/><rect x="551" y="435" width="238" height="24" fill="var(--ref)" opacity=".22"/>
+  <text class="vname" x="126" y="64">GENERATOR</text><text class="vname" x="566" y="64">CONDENSER</text>
+  <text class="vname" x="566" y="334">EVAPORATOR</text><text class="vname" x="126" y="334">ABSORBER</text>
+  <text class="lbl" x="126" y="88">T</text><text id="v-tg" x="146" y="88"></text><text class="lbl" x="126" y="108">x</text><text id="v-xs" x="146" y="108"></text>
+  <text class="lbl" x="126" y="128">P</text><text id="v-ph" x="146" y="128"></text><text class="lbl" x="126" y="148">Q</text><text id="v-qg" x="146" y="148"></text>
+  <text class="lbl" x="566" y="88">T</text><text id="v-tc" x="586" y="88"></text><text class="lbl" x="566" y="108">P</text><text id="v-ph2" x="586" y="108"></text>
+  <text class="lbl" x="566" y="128">Q</text><text id="v-qc" x="586" y="128"></text>
+  <text class="lbl" x="566" y="358">T</text><text id="v-te" x="586" y="358"></text><text class="lbl" x="566" y="378">P</text><text id="v-pl" x="586" y="378"></text>
+  <text class="lbl" x="566" y="398">Q</text><text id="v-qe" x="586" y="398"></text>
+  <text class="lbl" x="126" y="358">T</text><text id="v-ta" x="146" y="358"></text><text class="lbl" x="126" y="378">x</text><text id="v-xw" x="146" y="378"></text>
+  <text class="lbl" x="126" y="398">P</text><text id="v-pl2" x="146" y="398"></text><text class="lbl" x="126" y="418">Q</text><text id="v-qa" x="146" y="418"></text>
+
+  <!-- vapour: generator -> condenser, evaporator -> absorber -->
+  <path class="pipe" d="M350 75 H550" stroke="var(--vap)" stroke-dasharray="8 6" stroke-width="3" marker-end="url(#ar)"/>
+  <text class="lbl" x="450" y="66" text-anchor="middle">water vapour</text><text id="v-mref" x="450" y="96" text-anchor="middle"></text>
+  <path class="pipe" d="M550 345 H350" stroke="var(--vap)" stroke-dasharray="8 6" stroke-width="3" marker-end="url(#ar)"/>
+  <text class="lbl" x="450" y="336" text-anchor="middle">water vapour</text>
+
+  <!-- refrigerant liquid condenser -> valve -> evaporator -->
+  <path class="pipe" d="M700 190 V310" stroke="var(--ref)"/><path class="flow" id="f-ref" d="M700 190 V310"/>
+  <path d="M690 240 L710 260 M710 240 L690 260" stroke="var(--ink-2)" stroke-width="2"/><rect x="688" y="240" width="24" height="20" fill="none" stroke="var(--ink-2)" stroke-width="1.5"/>
+  <text class="lbl" x="718" y="254">expansion valve</text>
+
+  <!-- solution loop: absorber -> pump -> SHX -> generator (weak); generator -> SHX -> valve -> absorber (strong) -->
+  <path class="pipe" d="M170 310 V200" stroke="var(--sol)"/><path class="flow" id="f-weak" d="M170 310 V190"/>
+  <path class="pipe" d="M290 190 V310" stroke="var(--sol)" opacity=".75"/><path class="flow" id="f-strong" d="M290 190 V310"/>
+  <rect x="140" y="226" width="180" height="40" rx="5" fill="var(--panel)" stroke="var(--line-2)" stroke-width="1.5"/>
+  <text class="vname" x="230" y="251" text-anchor="middle" style="font-size:12px">SOLUTION HX</text>
+  <circle cx="170" cy="288" r="10" fill="var(--panel)" stroke="var(--ink-2)" stroke-width="1.5"/><path d="M165 292 L170 282 L175 292" fill="none" stroke="var(--ink-2)" stroke-width="1.5"/>
+  <text class="lbl" x="104" y="286" text-anchor="end">pump</text><text id="v-pump" x="104" y="302" text-anchor="end" style="font-size:12px"></text>
+  <path d="M280 280 L300 296 M300 280 L280 296" stroke="var(--ink-2)" stroke-width="2"/>
+  <text class="lbl" x="306" y="292">valve</text>
+  <text class="lbl" x="128" y="222" text-anchor="middle">weak</text><text class="lbl" x="332" y="222" text-anchor="middle">strong</text>
+
+  <!-- hot water through generator -->
+  <path class="pipe" d="M20 160 H330 V178 H20" stroke="var(--hot)"/><path class="flow" id="f-hw" d="M20 160 H330 V178 H20"/>
+  <text id="v-thwi" x="20" y="150" style="font-size:12px"></text><text id="v-thwo" x="20" y="198" style="font-size:12px"></text>
+
+  <!-- cooling water: in -> absorber -> condenser -> out -->
+  <path class="pipe" d="M20 446 H325 V375 H450 V150 H740 V110 H880" stroke="var(--cool)"/><path class="flow" id="f-cw" d="M20 446 H325 V375 H450 V150 H740 V110 H880"/>
+  <text id="v-tcwi" x="20" y="436" style="font-size:12px"></text><text id="v-tcwo" x="880" y="100" text-anchor="end" style="font-size:12px"></text>
+  <path d="M440 345 H460" stroke="var(--vap)" stroke-width="3"/>
+
+  <!-- chilled water through evaporator -->
+  <path class="pipe" d="M880 424 H620 V447 H880" stroke="var(--chill)"/><path class="flow" id="f-chw" d="M880 424 H620 V447 H880"/>
+  <text id="v-tchwi" x="880" y="414" text-anchor="end" style="font-size:12px"></text><text id="v-tchwo" x="880" y="469" text-anchor="end" style="font-size:12px;font-weight:500"></text>
+  <text class="lbl" x="880" y="484" text-anchor="end">supply to building</text>
+</svg>`;
+
+/* ---------------------------------------------------------------- UI: charts and tables */
+const chQ = new LineChart($('#ch-q'), { unit: 'kW', dec: 1, minX: 60 });
+const chT = new LineChart($('#ch-t'), { unit: '°C', dec: 2, minSpan: 1, minX: 60 });
+const chC = new LineChart($('#ch-cop'), { unit: '', dec: 3, minSpan: 0.02, minX: 60 });
+const chX = new LineChart($('#ch-x'), { unit: 'wt%', dec: 2, minSpan: 1, minX: 60 });
+const RMSE = Object.fromEntries(D.metrics.map(m => [m.output, m.RMSE]));
+const tb = $('#tbl-out tbody');
+const GROUPS = [['Heat duties', ['Q_evap_kW', 'Q_gen_kW', 'Q_cond_kW', 'Q_abs_kW']],
+  ['Water circuits', ['T_chw_out_C', 'T_hw_out_C', 'T_cw_out_C']],
+  ['Internal state', ['T_gen_C', 'T_cond_C', 'T_evap_C', 'T_abs_C', 'x_strong_wt', 'x_weak_wt', 'P_high_kPa', 'P_low_kPa', 'm_ref_gen_kg_s']]];
+tb.innerHTML = GROUPS.map(([g, ns]) => `<tr class="grp"><td colspan="5">${g}</td></tr>` + ns.map(n => { const u = NAMES[n][1];
+  return `<tr><td>${NAMES[n][0]}</td><td class="n" id="o-${n}"></td><td>${u}</td><td class="n" id="s-${n}"></td><td class="n">${fmt(RMSE[n], DEC[u] + 1)}</td></tr>`; }).join('')).join('');
+
+function setText(id, s) { const e = document.getElementById(id); if (e) e.textContent = s; }
+function pill(id, cls, txt) { const p = $(id); p.className = 'pill ' + cls; p.lastElementChild.textContent = txt; }
+function flowAnim(id, ratio) { const e = document.getElementById(id); if (e) e.style.animationDuration = (1.2 / Math.max(0.2, ratio)).toFixed(2) + 's'; }
+
+function render() {
+  const H = S.hist, n = H.t.length - 1, y = j => H.y[j][n], last = n;
+  // inputs
+  SL.forEach((s, k) => { if (document.activeElement !== s.inp) s.inp.value = S.u[k]; s.out().textContent = S.u[k].toFixed(s.dec); });
+  setText('clock', hhmm(S.t));
+  // KPIs
+  KPI.forEach(k => { const arr = k.get(H), v = arr[last], el = $('#k-' + k.id);
+    el.querySelector('.num').textContent = fmt(v, k.dec); el.querySelector('.s').textContent = k.sub(v);
+    const ch = el.querySelector('.chip'); if (k.chip) { const [c, t] = k.chip(v); ch.className = 'chip ' + c; ch.textContent = t; ch.hidden = false; }
+    spark(el.querySelector('canvas'), arr.slice(-180), k.color); });
+  const xm = X_CRYST - y(T.x_strong_wt), fm = y(T.T_evap_C) - T_FREEZE;
+  pill('#st-cryst', xm > 2 ? 'good' : xm > 0.8 ? 'warn' : 'bad', `Crystallisation margin ${xm.toFixed(1)} wt%`);
+  pill('#st-freeze', fm > 1 ? 'good' : fm > 0.3 ? 'warn' : 'bad', `Freezing margin ${fm.toFixed(1)} K`);
+  // schematic
+  setText('v-tg', y(T.T_gen_C).toFixed(2) + ' °C'); setText('v-xs', y(T.x_strong_wt).toFixed(2) + ' wt%');
+  setText('v-ph', y(T.P_high_kPa).toFixed(2) + ' kPa'); setText('v-qg', y(T.Q_gen_kW).toFixed(1) + ' kW in');
+  setText('v-tc', y(T.T_cond_C).toFixed(2) + ' °C'); setText('v-ph2', y(T.P_high_kPa).toFixed(2) + ' kPa'); setText('v-qc', y(T.Q_cond_kW).toFixed(1) + ' kW out');
+  setText('v-te', y(T.T_evap_C).toFixed(2) + ' °C'); setText('v-pl', y(T.P_low_kPa).toFixed(3) + ' kPa'); setText('v-qe', y(T.Q_evap_kW).toFixed(1) + ' kW in');
+  setText('v-ta', y(T.T_abs_C).toFixed(2) + ' °C'); setText('v-xw', y(T.x_weak_wt).toFixed(2) + ' wt%');
+  setText('v-pl2', y(T.P_low_kPa).toFixed(3) + ' kPa'); setText('v-qa', y(T.Q_abs_kW).toFixed(1) + ' kW out');
+  setText('v-mref', (y(T.m_ref_gen_kg_s) * 3600).toFixed(1) + ' kg/h');
+  setText('v-pump', (S.u[6] * 3600).toFixed(0) + ' kg/h');
+  setText('v-thwi', `${S.u[0].toFixed(1)} °C in`); setText('v-thwo', `${y(T.T_hw_out_C).toFixed(1)} °C out`);
+  setText('v-tcwi', `${S.u[2].toFixed(1)} °C in`); setText('v-tcwo', `${y(T.T_cw_out_C).toFixed(1)} °C out`);
+  setText('v-tchwi', `${S.u[4].toFixed(1)} °C return`); setText('v-tchwo', `${y(T.T_chw_out_C).toFixed(2)} °C supply`);
+  flowAnim('f-hw', S.u[1] / U0[1]); flowAnim('f-cw', S.u[3] / U0[3]); flowAnim('f-chw', S.u[5] / U0[5]);
+  flowAnim('f-weak', S.u[6] / U0[6]); flowAnim('f-strong', S.u[6] / U0[6]); flowAnim('f-ref', y(T.m_ref_gen_kg_s) / 0.0351);
+  // charts
+  const band = j => [H.lo.map(r => r[j]), H.hi.map(r => r[j])];
+  chQ.set(H.t, [
+    { name: 'Q_gen', data: H.y[T.Q_gen_kW], color: '--s2' }, { name: 'Q_abs', data: H.y[T.Q_abs_kW], color: '--s4' },
+    { name: 'Q_cond', data: H.y[T.Q_cond_kW], color: '--s3' }, { name: 'Q_evap', data: H.y[T.Q_evap_kW], color: '--s1' }]);
+  chT.set(H.t, [{ name: 'T_chw_out', data: H.y[T.T_chw_out_C], color: '--s1', band: band(T.T_chw_out_C) },
+    { name: 'T_evap', data: H.y[T.T_evap_C], color: '--s3', band: band(T.T_evap_C) }], { refs: [{ v: 0, label: 'freezing 0 °C', color: '--bad' }] });
+  chC.set(H.t, [{ name: 'COP', data: H.cop, color: '--s1' }]);
+  chX.set(H.t, [{ name: 'x_strong', data: H.y[T.x_strong_wt], color: '--s2', band: band(T.x_strong_wt) },
+    { name: 'x_weak', data: H.y[T.x_weak_wt], color: '--s1', band: band(T.x_weak_wt) }], { refs: [{ v: X_CRYST, label: 'crystallisation 64 wt%', color: '--bad' }] });
+  // tables
+  D.targets.forEach((nm, j) => { const u = NAMES[nm][1]; setText('o-' + nm, fmt(y(j), DEC[u]));
+    setText('s-' + nm, '± ' + fmt((H.hi[n][j] - H.lo[n][j]) / 2, DEC[u] + 1)); });
+  const qin = y(T.Q_gen_kW) + y(T.Q_evap_kW), qout = y(T.Q_cond_kW) + y(T.Q_abs_kW), gap = qin - qout;
+  $('#tbl-energy tbody').innerHTML = `<tr><td>Heat in: Q_gen + Q_evap</td><td class="n">${qin.toFixed(1)} kW</td></tr>
+    <tr><td>Heat out: Q_cond + Q_abs</td><td class="n">${qout.toFixed(1)} kW</td></tr>
+    <tr><td>Gap (stored in plant)</td><td class="n">${gap >= 0 ? '+' : ''}${gap.toFixed(1)} kW · ${(100 * gap / qin).toFixed(2)} %</td></tr>`;
+}
+
+/* ---------------------------------------------------------------- loop */
+let lastT = performance.now();
+function frame(now) {
+  const dt = Math.min(0.25, (now - lastT) / 1000); lastT = now;
+  if (S.running && !document.hidden && !$('#view-live').hidden) {
+    S.acc += dt * S.speed; let k = 0;
+    while (S.acc >= 1 && k < 6) { stepOnce(); S.acc -= 1; k++; }
+    if (S.acc > 6) S.acc = 0;
+    if (k) render();
+  }
+  requestAnimationFrame(frame);
+}
+
+/* ---------------------------------------------------------------- validation view */
+function initValidation() {
+  const comp = D.comparison, best = comp.reduce((a, b) => a.mean_R2 > b.mean_R2 ? a : b);
+  const maxN = Math.max(...comp.map(c => c.mean_NRMSE_pct));
+  $('#bars').innerHTML = comp.map(c => `<div class="bar ${c === best ? 'best' : ''}"><span>${c.model}<br><small style="color:var(--muted)">R² ${c.mean_R2.toFixed(4)}</small></span>
+    <span class="track"><span class="fill" style="width:${(c.mean_NRMSE_pct / maxN * 100).toFixed(1)}%"></span></span><span class="num">${c.mean_NRMSE_pct.toFixed(2)} %</span></div>`).join('');
+  const m = Object.fromEntries(D.metrics.map(r => [r.output, r]));
+  $('#val-hero').innerHTML = [[best.mean_R2.toFixed(4), 'mean R² over 17 outputs'], [best.mean_NRMSE_pct.toFixed(2) + ' %', 'mean NRMSE (error / range)'],
+    [m.Q_evap_kW.RMSE.toFixed(2) + ' kW', 'RMSE of cooling capacity'], [m.T_chw_out_C.RMSE.toFixed(3) + ' K', 'RMSE of chilled-water supply'],
+    [D.n_runs.test + ' runs', 'never seen during training']].map(([v, l]) => `<div class="panel s"><span class="num">${v}</span><span>${l}</span></div>`).join('');
+  $('#tbl-met tbody').innerHTML = D.metrics.map(r => { const u = NAMES[r.output][1], d = DEC[u] + 1;
+    return `<tr><td>${NAMES[r.output][0]}</td><td>${u}</td><td class="n">${r.R2.toFixed(5)}</td><td class="n">${fmt(r.RMSE, d)}</td><td class="n">${fmt(r.MAE, d)}</td><td class="n">${r.NRMSE_pct.toFixed(3)}</td></tr>`; }).join('');
+  const TYPE = { daily: '12-h daily profile', aprbs: 'random multi-input excitation', step: 'step change', ramp: 'ramp', startup: 'warm start' };
+  D.test_runs.forEach((r, i) => $('#rp-run').add(new Option(`Run ${r.id} · ${TYPE[r.type]} (${(r.t[r.t.length - 1] / 60).toFixed(0)} h)`, i)));
+  [...D.targets, 'COP_avg30'].forEach((n, j) => $('#rp-out').add(new Option(`${NAMES[n][0]} [${NAMES[n][1]}]`, j)));
+  const rp = new LineChart($('#ch-rp'), { height: 260, endLabels: true }), rpi = new LineChart($('#ch-rp-in'), { height: 150, unit: '°C', dec: 1 });
+  const cache = {};
+  function simulate(i) {
+    if (cache[i]) return cache[i]; const run = D.test_runs[i], tw = new TwinEngine.Twin(D); tw.reset(run.U[0]);
+    const P = [], LO = [], HI = []; run.U.forEach(u => { const r = tw.step(u); P.push(Array.from(r.mean)); LO.push(r.lo); HI.push(r.hi); });
+    const qe = P.map(p => p[T.Q_evap_kW]), qg = P.map(p => p[T.Q_gen_kW]);
+    P.forEach((p, k) => { let se = 0, sg = 0; for (let q = Math.max(0, k - COPW + 1); q <= k; q++) { se += qe[q]; sg += qg[q]; } p.push(se / sg); });
+    return cache[i] = { P, LO, HI };
+  }
+  function show() {
+    const i = +$('#rp-run').value, j = +$('#rp-out').value, run = D.test_runs[i], { P, LO, HI } = simulate(i);
+    const name = [...D.targets, 'COP_avg30'][j], u = NAMES[name][1], d = DEC[u];
+    const x = run.t.map(v => v * 60 / 60), truth = run.Y.map(r => r[j]), pred = P.map(r => r[j]);
+    const series = [{ name: 'Simulation', short: 'Simulation', data: truth, color: '--ink', width: 2.5, dec: d },
+      { name: 'AI ensemble', short: 'AI', data: pred, color: '--s1', dash: [6, 4], dec: d, band: j < D.targets.length ? [LO.map(r => r[j]), HI.map(r => r[j])] : null }];
+    rp.o.unit = u === '–' ? '' : u; rp.o.dec = d; rp.set(x, series);
+    rpi.set(x, [{ name: 'Hot water in', short: 'T_hw', data: run.U.map(r => r[0]), color: '--hot' },
+      { name: 'Cooling water in', short: 'T_cw', data: run.U.map(r => r[2]), color: '--cool' },
+      { name: 'Chilled return', short: 'T_chw', data: run.U.map(r => r[4]), color: '--chill' }]);
+    let se = 0, st = 0, mx = 0; const mu = truth.reduce((a, b) => a + b, 0) / truth.length;
+    truth.forEach((v, k) => { const e = pred[k] - v; se += e * e; st += (v - mu) ** 2; mx = Math.max(mx, Math.abs(e)); });
+    const rmse = Math.sqrt(se / truth.length);
+    $('#rp-stats').innerHTML = `<span>RMSE <b>${fmt(rmse, d + 1)}</b> ${u}</span><span>max error <b>${fmt(mx, d + 1)}</b> ${u}</span>` +
+      (st > 1e-12 ? `<span>R² <b>${(1 - se / st).toFixed(4)}</b></span>` : '') + `<span>${truth.length} steps of 60 s</span>`;
+  }
+  $('#rp-run').addEventListener('change', show); $('#rp-out').addEventListener('change', show);
+  return show;
+}
+let showReplay = null;
+
+/* ---------------------------------------------------------------- details view */
+function initDetails() {
+  const best = D.comparison.reduce((a, b) => a.mean_R2 > b.mean_R2 ? a : b);
+  setText('d-r2', 'R² ' + best.mean_R2.toFixed(4));
+  const rows = [['Architecture', 'LSTM, 2 layers × ' + D.hidden + ' units, Linear–tanh–Linear head'],
+    ['Ensemble', D.weights.length + ' networks, different random seeds, averaged'],
+    ['Parameters', (twin.nParams).toLocaleString('en-US') + ' per network'],
+    ['Inputs', '7 external: water temperatures and flows, pump flow'], ['Outputs', '16 states and duties + derived COP_avg30'],
+    ['Time step', D.dt + ' s, simulation mode (no measured outputs fed back)'], ['Warm-up', D.warmup + ' steps at the initial inputs'],
+    ['Training data', `${D.n_runs.train} runs train · ${D.n_runs.validation} validation · ${D.n_runs.test} test`],
+    ['Training', 'full-sequence BPTT, AdamW, cosine LR, 600 epochs, best-on-validation'],
+    ['Loss', 'mean squared error on z-scored outputs']];
+  $('#tbl-card').innerHTML = rows.map(([a, b]) => `<tr><td>${a}</td><td style="white-space:normal">${b}</td></tr>`).join('');
+  $('#tbl-env tbody').innerHTML = D.inputs.map((n, k) => { const [l, u] = NAMES[n], dd = u === '°C' ? 1 : 2;
+    return `<tr><td>${l} [${u}]</td><td class="n">${RNG[k][0].toFixed(dd)}</td><td class="n">${U0[k].toFixed(dd)}</td><td class="n">${RNG[k][1].toFixed(dd)}</td></tr>`; }).join('');
+}
+
+/* ---------------------------------------------------------------- routing + theme */
+function route() {
+  const v = (location.hash || '#live').slice(1), view = ['live', 'validation', 'details'].includes(v) ? v : 'live';
+  document.querySelectorAll('section.view').forEach(s => s.hidden = s.id !== 'view-' + view);
+  document.querySelectorAll('nav.tabs a').forEach(a => a.dataset.view === view ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
+  if (view === 'validation') { if (!showReplay) showReplay = initValidation(); requestAnimationFrame(showReplay); }
+  if (view === 'live') render();
+}
+window.addEventListener('hashchange', route);
+const redraw = () => { if (!$('#view-live').hidden) render(); else if (showReplay && !$('#view-validation').hidden) showReplay(); };
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', redraw);
+new MutationObserver(redraw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+restart(); initDetails(); updRun(); route(); requestAnimationFrame(frame);
+</script>

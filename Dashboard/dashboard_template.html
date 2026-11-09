@@ -1,0 +1,1224 @@
+<title>LiBr Chiller Twin</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@500;600&family=JetBrains+Mono:wght@400;500&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/renderers/CSS2DRenderer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/environments/RoomEnvironment.js"></script>
+<style>
+/* Plant-HMI layout (ISA-101 style): grey ground, square panels, 1 px rules, colour kept for process lines and abnormal states.
+   Plant screen = model tree | 3D viewport + readout strip | properties; operating conditions below; status bar fixed at bottom.
+   Trends / Validation / Notes are set like a lab report: numbered sections, booktabs tables, captioned figures. */
+:root {
+  --bg: #e4e4e0; --panel: #f6f6f3; --panel-2: #ecece8; --ink: #1c1d1e; --ink-2: #474a4d; --muted: #6f7275;
+  --line: #c6c6c0; --line-2: #a3a49f; --accent: #0d5a86; --accent-ink: #ffffff; --sel: #d3e2ec;
+  --ok: #2c6e47; --warn: #a86a12; --warn-bg: #f2c46b; --bad: #a3241c; --bad-bg: #c93b2f;
+  --hot: #bf5230; --cool: #23877d; --chill: #2d6db3; --weak: #b48a33; --strong: #7a5228; --vap: #8b9298; --ref: #4a8ec6; --heat: #d58029;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+  --scene: #d9dad6; --ground: #c4c5c0; --pad: #aeafaa;
+  --f-ui: "Barlow", "Segoe UI", system-ui, sans-serif;
+  --f-cond: "Barlow Condensed", "Arial Narrow", "Segoe UI", sans-serif;
+  --f-mono: "JetBrains Mono", Consolas, "SFMono-Regular", ui-monospace, monospace;
+  --f-serif: "Source Serif 4", Georgia, "Times New Roman", serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #1a1b1d; --panel: #222326; --panel-2: #2a2b2f; --ink: #e3e3e0; --ink-2: #b4b5b2; --muted: #8a8b89;
+  --line: #393a3e; --line-2: #55565a; --accent: #6eaad6; --accent-ink: #0d1114; --sel: #24394b;
+  --ok: #6cbf8d; --warn: #e3a541; --warn-bg: #c98f2c; --bad: #f0786c; --bad-bg: #b8352b;
+  --hot: #d9693f; --cool: #3aa99e; --chill: #4f8fd6; --weak: #cfa24a; --strong: #a8763f; --vap: #9aa2a8; --ref: #6aa9dd; --heat: #e8913a;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  --scene: #24262a; --ground: #1e2023; --pad: #2e3034; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #1a1b1d; --panel: #222326; --panel-2: #2a2b2f; --ink: #e3e3e0; --ink-2: #b4b5b2; --muted: #8a8b89;
+  --line: #393a3e; --line-2: #55565a; --accent: #6eaad6; --accent-ink: #0d1114; --sel: #24394b;
+  --ok: #6cbf8d; --warn: #e3a541; --warn-bg: #c98f2c; --bad: #f0786c; --bad-bg: #b8352b;
+  --hot: #d9693f; --cool: #3aa99e; --chill: #4f8fd6; --weak: #cfa24a; --strong: #a8763f; --vap: #9aa2a8; --ref: #6aa9dd; --heat: #e8913a;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+  --scene: #24262a; --ground: #1e2023; --pad: #2e3034; color-scheme: dark; }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--f-ui); font-size: 14px; line-height: 1.45; padding-bottom: calc(30px + env(safe-area-inset-bottom, 0px)); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 20; background: var(--panel); }
+h1, h2, h3 { margin: 0; font-weight: 600; }
+p { margin: 0; }
+.num { font-family: var(--f-mono); font-variant-numeric: tabular-nums; }
+.muted { color: var(--muted); }
+button, select, input { font: inherit; color: inherit; }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.gut { padding-left: max(12px, env(safe-area-inset-left, 0px)); padding-right: max(12px, env(safe-area-inset-right, 0px)); }
+
+/* menu bar */
+header.mb { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 15; background: var(--panel); border-bottom: 1px solid var(--line-2); }
+header.mb .gut { display: flex; align-items: stretch; gap: 0 22px; flex-wrap: wrap; min-height: 42px; }
+.app { display: flex; align-items: center; gap: 9px; padding-block: 6px; }
+.app b { font-family: var(--f-cond); font-size: 18px; font-weight: 600; letter-spacing: .01em; }
+.app span { font-size: 12px; color: var(--muted); }
+nav.menu { display: flex; align-items: stretch; overflow-x: auto; max-width: 100%; }
+nav.menu a { display: flex; align-items: center; padding: 0 12px; color: var(--ink-2); text-decoration: none; font-weight: 500; border-bottom: 3px solid transparent; white-space: nowrap; }
+nav.menu a:hover { color: var(--ink); background: var(--panel-2); }
+nav.menu a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--accent); }
+.mb .model { margin-left: auto; display: flex; align-items: center; font-size: 12.5px; color: var(--muted); }
+
+/* status bar */
+.sbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 15; background: var(--panel-2); border-top: 1px solid var(--line-2); font-family: var(--f-mono); font-size: 11.5px; color: var(--ink-2); padding-bottom: env(safe-area-inset-bottom, 0px); }
+.sbar .gut { display: flex; gap: 0; height: 28px; align-items: center; overflow: hidden; white-space: nowrap; }
+.sbar span { padding: 0 12px; border-right: 1px solid var(--line); }
+.sbar span:first-child { padding-left: 0; }
+.sbar .r { margin-left: auto; border-right: 0; padding-right: 0; }
+@media (max-width: 700px) { .sbar .hide-s { display: none; } }
+
+main { padding-block: 10px 24px; }
+.view { display: grid; gap: 10px; }
+
+/* generic panel */
+.pn { background: var(--panel); border: 1px solid var(--line-2); min-width: 0; }
+.ph { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 10px; background: var(--panel-2); border-bottom: 1px solid var(--line); font-family: var(--f-cond); font-size: 13.5px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; color: var(--ink-2); min-height: 30px; }
+.ph small { font-family: var(--f-ui); text-transform: none; letter-spacing: 0; font-weight: 400; font-size: 12px; color: var(--muted); }
+.pb { padding: 10px; }
+
+/* status line */
+.statusline { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 7px 10px; background: var(--panel); border: 1px solid var(--line-2); font-size: 14.5px; }
+.statusline .txt { flex: 1 1 420px; }
+.statusline .txt b { font-family: var(--f-mono); font-weight: 500; }
+.al { display: inline-block; font-family: var(--f-mono); font-size: 11.5px; padding: 2px 7px; border: 1px solid var(--line-2); color: var(--ink-2); background: var(--panel-2); }
+.al.warn { background: var(--warn-bg); border-color: var(--warn-bg); color: #1a1205; }
+.al.bad { background: var(--bad-bg); border-color: var(--bad-bg); color: #fff; }
+
+/* plant layout */
+.plant { display: grid; grid-template-columns: 230px minmax(0, 1fr) 320px; gap: 10px; align-items: start; }
+@media (max-width: 1240px) { .plant { grid-template-columns: minmax(0, 1fr) 320px; } .plant .treecol { grid-column: 1 / -1; order: 3; } }
+@media (max-width: 860px) { .plant { grid-template-columns: minmax(0, 1fr); } }
+.center { display: grid; gap: 10px; min-width: 0; }
+
+.tree { max-height: 640px; overflow: auto; font-size: 13px; }
+@media (max-width: 1240px) { .tree { max-height: none; display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); } }
+.tg { padding: 5px 10px 3px; font-family: var(--f-cond); font-weight: 600; font-size: 13px; color: var(--muted); border-top: 1px solid var(--line); }
+.tg:first-child { border-top: 0; }
+.trow { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 6px; width: 100%; text-align: left; padding: 3px 10px 3px 18px; border: 0; background: none; cursor: pointer; align-items: baseline; }
+.trow:hover { background: var(--panel-2); }
+.trow.on { background: var(--sel); }
+.trow .id { font-family: var(--f-mono); font-size: 12px; display: flex; gap: 6px; align-items: center; }
+.trow .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
+.sq { width: 9px; height: 9px; display: inline-block; flex: none; background: var(--c); }
+.urow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; padding: 3px 10px 3px 18px; font-size: 12.5px; }
+.urow .num { font-size: 12px; }
+
+.vpwrap { border: 1px solid var(--line-2); background: var(--panel); min-width: 0; }
+.vptb { display: flex; flex-wrap: wrap; align-items: center; gap: 0; background: var(--panel-2); border-bottom: 1px solid var(--line); }
+.vptb .t { padding: 0 10px; font-family: var(--f-cond); font-weight: 600; font-size: 13.5px; text-transform: uppercase; letter-spacing: .03em; color: var(--ink-2); margin-right: auto; }
+.vptb button { border: 0; border-left: 1px solid var(--line); background: none; padding: 6px 11px; font-size: 13px; cursor: pointer; }
+.vptb button:hover { background: var(--panel); }
+.vptb button[aria-pressed="true"] { background: var(--sel); }
+.viewport { position: relative; height: clamp(380px, 58vh, 640px); background: var(--scene); overflow: hidden; }
+.viewport canvas { display: block; touch-action: none; }
+.viewport .css2d { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
+.vp-legend { position: absolute; left: 8px; bottom: 8px; z-index: 3; display: flex; flex-wrap: wrap; gap: 2px 12px; max-width: calc(100% - 16px); font-size: 11.5px; color: var(--ink-2); background: var(--panel); border: 1px solid var(--line); padding: 4px 8px; }
+.vp-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.vp-legend i { width: 16px; height: 3px; display: inline-block; }
+.vp-hint { display: none; }
+@media (max-width: 600px) { .vp-legend { display: none; } }
+.nogl { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; color: var(--ink-2); }
+
+.tag3d { pointer-events: auto; cursor: pointer; background: var(--panel); border: 1px solid var(--line-2); padding: 2px 6px 3px; text-align: left; line-height: 1.25; }
+.tag3d b { display: block; font-family: var(--f-mono); font-size: 11px; font-weight: 500; color: var(--ink); white-space: nowrap; }
+.tag3d span { display: none; }
+.tag3d em { display: block; font-style: normal; font-family: var(--f-mono); font-size: 11px; color: var(--ink-2); white-space: nowrap; }
+.tag3d.sel { outline: 2px solid var(--accent); }
+.stag { pointer-events: auto; cursor: pointer; font-family: var(--f-mono); font-size: 11px; color: var(--ink); background: var(--panel); border: 1px solid var(--c, var(--line-2)); border-left-width: 4px; padding: 0 4px; white-space: nowrap; }
+.stag small { color: var(--ink-2); font-size: 10.5px; margin-left: 4px; }
+.stag.sel { outline: 2px solid var(--accent); }
+.wtag { font-family: var(--f-mono); font-size: 10.5px; color: var(--ink); background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--c); padding: 0 5px; white-space: nowrap; }
+.hide-vals .stag small, .hide-vals .tag3d em, .hide-vals .wtag { display: none; }
+
+/* readout strip */
+.readouts { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); border: 1px solid var(--line-2); background: var(--panel); }
+@media (max-width: 1100px) { .readouts { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .readouts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.ro { padding: 7px 10px 8px; border-left: 1px solid var(--line); border-top: 1px solid var(--line); margin: 0 0 -1px -1px; position: relative; }
+.ro .l { font-size: 12.5px; color: var(--ink-2); }
+.ro .v { display: flex; align-items: baseline; gap: 5px; }
+.ro .v b { font-family: var(--f-mono); font-size: 23px; font-weight: 500; }
+.ro .v span { font-size: 12px; color: var(--muted); }
+.ro .s { font-size: 12px; color: var(--muted); min-height: 1.4em; }
+.ro.warn { box-shadow: inset 4px 0 0 var(--warn-bg); } .ro.bad { box-shadow: inset 4px 0 0 var(--bad-bg); }
+.ro .flag { font-family: var(--f-mono); font-size: 10.5px; margin-left: 4px; }
+.ro.warn .flag { color: var(--warn); } .ro.bad .flag { color: var(--bad); }
+
+/* properties */
+.props .pb { display: grid; gap: 10px; max-height: calc(clamp(380px, 58vh, 640px) + 120px); overflow: auto; }
+.props h3 { font-size: 17px; }
+.props .sub { font-size: 12.5px; color: var(--muted); font-family: var(--f-mono); }
+.props .desc { font-size: 14px; color: var(--ink-2); }
+table.kv { width: 100%; border-collapse: collapse; font-size: 13px; }
+table.kv th { text-align: left; font-weight: 400; color: var(--ink-2); padding: 4px 8px 4px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+table.kv td { text-align: right; font-family: var(--f-mono); font-size: 12.5px; padding: 4px 0; border-bottom: 1px solid var(--line); white-space: nowrap; }
+table.kv tr.sec th { font-family: var(--f-cond); font-weight: 600; color: var(--muted); text-transform: uppercase; font-size: 12px; letter-spacing: .03em; padding-top: 8px; }
+.note { font-size: 12px; color: var(--muted); }
+.linkrow { display: flex; flex-wrap: wrap; gap: 4px; }
+.lk { border: 1px solid var(--line-2); background: var(--panel-2); padding: 1px 6px; font-family: var(--f-mono); font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px; }
+.lk:hover { background: var(--sel); }
+.tourbar { display: flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--panel-2); padding: 6px 8px; }
+.tourbar .s { margin-right: auto; font-size: 12.5px; color: var(--ink-2); }
+.btn { border: 1px solid var(--line-2); background: var(--panel); padding: 4px 10px; cursor: pointer; font-size: 13px; }
+.btn:hover { background: var(--panel-2); }
+.btn:disabled { opacity: .45; cursor: default; }
+.btn.pri { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+
+/* operating conditions */
+.cond { display: grid; grid-template-columns: 330px minmax(0, 1fr); }
+@media (max-width: 900px) { .cond { grid-template-columns: minmax(0, 1fr); } }
+.cond .case { padding: 10px; border-right: 1px solid var(--line); display: grid; gap: 8px; align-content: start; }
+@media (max-width: 900px) { .cond .case { border-right: 0; border-bottom: 1px solid var(--line); } }
+.cond label.f { display: grid; gap: 3px; font-size: 12.5px; color: var(--ink-2); }
+select { border: 1px solid var(--line-2); background: var(--panel); padding: 4px 6px; width: 100%; }
+.cond .desc { font-size: 13.5px; color: var(--ink-2); }
+.runrow { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.runrow select { width: auto; }
+.inputs { display: grid; }
+.inrow { display: grid; grid-template-columns: minmax(170px, 230px) minmax(110px, 1fr) 88px 42px 120px; gap: 10px; align-items: center; padding: 6px 10px; border-bottom: 1px solid var(--line); font-size: 13.5px; }
+.inrow:last-child { border-bottom: 0; }
+.inrow.hd { font-family: var(--f-cond); font-weight: 600; color: var(--muted); font-size: 12.5px; text-transform: uppercase; letter-spacing: .03em; padding-block: 4px; background: var(--panel-2); }
+.inrow .nm { display: flex; gap: 7px; align-items: center; }
+.inrow .rg { font-size: 11.5px; color: var(--muted); font-family: var(--f-mono); }
+.inrow input[type=number] { width: 100%; border: 1px solid var(--line-2); background: var(--panel); padding: 3px 5px; font-family: var(--f-mono); font-size: 13px; text-align: right; }
+input[type=range] { width: 100%; accent-color: var(--accent); margin: 0; }
+@media (max-width: 640px) { .inrow { grid-template-columns: minmax(0, 1fr) 84px 38px; } .inrow input[type=range] { grid-column: 1 / -1; grid-row: 2; } .inrow .rg { display: none; } .inrow.hd { display: none; } }
+
+/* charts + report tables */
+.chart { position: relative; }
+.chart canvas { width: 100%; display: block; touch-action: pan-y; }
+.tip { position: absolute; pointer-events: none; background: var(--panel); border: 1px solid var(--line-2); padding: 4px 7px; font-size: 12px; white-space: nowrap; z-index: 2; }
+.tip b { font-family: var(--f-mono); font-weight: 500; }
+.tip .row { display: flex; align-items: center; gap: 6px; }
+.tip .row i { width: 12px; height: 3px; display: inline-block; }
+figure { margin: 0; }
+figcaption { font-family: var(--f-serif); font-size: 13.5px; color: var(--ink-2); margin-top: 6px; }
+figcaption b { font-weight: 600; color: var(--ink); }
+.figs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 820px) { .figs { grid-template-columns: minmax(0, 1fr); } }
+.tw { overflow-x: auto; }
+table.bt { border-collapse: collapse; width: 100%; font-size: 13px; border-top: 2px solid var(--ink); border-bottom: 2px solid var(--ink); }
+table.bt th { text-align: left; font-weight: 600; padding: 5px 9px; border-bottom: 1px solid var(--ink); white-space: nowrap; }
+table.bt td { padding: 3px 9px; white-space: nowrap; }
+table.bt td.n, table.bt th.n { text-align: right; font-family: var(--f-mono); font-variant-numeric: tabular-nums; font-size: 12.5px; }
+table.bt tr.g td { padding-top: 9px; font-style: italic; font-family: var(--f-serif); color: var(--ink-2); }
+table.bt tr.click { cursor: pointer; } table.bt tr.click:hover td { background: var(--panel-2); }
+table.bt tr.best td { font-weight: 600; }
+.cols2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 900px) { .cols2 { grid-template-columns: minmax(0, 1fr); } }
+
+/* report pages */
+.report { max-width: 980px; margin: 0 auto; background: var(--panel); border: 1px solid var(--line-2); padding: 28px clamp(16px, 4vw, 44px) 36px; display: grid; gap: 14px; }
+.report h2 { font-family: var(--f-serif); font-size: 26px; font-weight: 600; line-height: 1.2; }
+.report h3 { font-family: var(--f-serif); font-size: 19px; font-weight: 600; margin-top: 12px; }
+.report .lede { font-family: var(--f-serif); font-size: 16px; color: var(--ink-2); max-width: 68ch; }
+.report p, .report li, .report dd { font-family: var(--f-serif); font-size: 15.5px; line-height: 1.6; max-width: 70ch; }
+.report ol, .report ul { margin: 0; padding-left: 22px; display: grid; gap: 4px; }
+.report .meta { font-size: 12.5px; color: var(--muted); font-family: var(--f-mono); }
+.report dl { margin: 0; display: grid; grid-template-columns: minmax(130px, 200px) minmax(0, 1fr); gap: 6px 18px; }
+.report dt { font-weight: 600; font-size: 14px; padding-top: 2px; }
+.report dd { margin: 0; }
+@media (max-width: 560px) { .report dl { grid-template-columns: minmax(0, 1fr); } .report dd { margin-bottom: 6px; } }
+.ctl2 { display: flex; flex-wrap: wrap; gap: 10px; }
+.ctl2 label { display: grid; gap: 3px; font-size: 12.5px; color: var(--ink-2); flex: 1 1 240px; }
+.rstats { font-family: var(--f-mono); font-size: 12.5px; color: var(--ink-2); display: flex; flex-wrap: wrap; gap: 4px 18px; }
+.inl { border: 0; background: none; padding: 0; color: var(--accent); text-decoration: underline; cursor: pointer; font: inherit; }
+.refs li { font-size: 14px; }
+</style>
+
+<header class="mb">
+  <div class="gut">
+    <div class="app">
+      <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><rect x="1.5" y="5" width="23" height="16" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M1.5 13h23" stroke="currentColor" stroke-width="1.2"/><circle cx="8" cy="9" r="1.6" fill="currentColor"/><circle cx="18" cy="17" r="1.6" fill="currentColor"/></svg>
+      <b>LiBr Chiller Twin</b><span>v1.3</span>
+    </div>
+    <nav class="menu" aria-label="Views">
+      <a href="#plant" data-view="plant">Plant</a>
+      <a href="#trends" data-view="trends">Trends &amp; tables</a>
+      <a href="#validation" data-view="validation">Validation</a>
+      <a href="#notes" data-view="notes">Notes</a>
+    </nav>
+    <div class="model">LSTM 2×128, 3-model ensemble · runs in this browser</div>
+  </div>
+</header>
+
+<main class="gut">
+<!-- ============================================================ PLANT -->
+<section class="view" id="view-plant">
+  <div class="statusline"><span class="txt" id="sl-text">Loading model…</span><span class="al" id="al-cryst">CRYST</span><span class="al" id="al-freeze">FREEZE</span></div>
+  <div class="plant">
+    <aside class="pn treecol"><div class="ph">Model browser</div><div class="tree" id="tree"></div></aside>
+    <div class="center">
+      <div class="vpwrap">
+        <div class="vptb"><span class="t">3D view</span>
+          <button id="v-home" type="button">Home</button><button id="v-top" type="button">Plan</button><button id="v-tour" type="button">Tour</button><button id="v-vals" type="button" aria-pressed="true">Values</button>
+        </div>
+        <div class="viewport" id="vp">
+          <div class="vp-legend">
+            <span><i style="background:var(--weak)"></i>weak sol.</span><span><i style="background:var(--strong)"></i>strong sol.</span><span><i style="background:var(--vap)"></i>vapour</span><span><i style="background:var(--ref)"></i>liquid water</span>
+            <span><i style="background:var(--hot)"></i>hot water</span><span><i style="background:var(--cool)"></i>cooling water</span><span><i style="background:var(--chill)"></i>chilled water</span><span><i style="background:var(--heat)"></i>QSHX</span>
+          </div>
+        </div>
+      </div>
+      <div class="readouts" id="ro"></div>
+    </div>
+    <aside class="pn props"><div class="ph"><span id="props-h">Properties</span><small id="props-hs"></small></div><div class="pb" id="props"></div></aside>
+  </div>
+
+  <div class="pn">
+    <div class="ph">Operating conditions <small>inputs to the model, limited to the training range</small></div>
+    <div class="cond">
+      <div class="case">
+        <label class="f" for="scn">Case<select id="scn"></select></label>
+        <p class="desc" id="scn-desc"></p>
+        <div class="runrow">
+          <button class="btn pri" id="btn-play" type="button">Pause</button>
+          <button class="btn" id="btn-reset" type="button">Restart</button>
+          <label class="f" for="speed" style="display:flex;align-items:center;gap:6px">Speed <select id="speed"><option value="1">1 min/s</option><option value="5" selected>5 min/s</option><option value="20">20 min/s</option></select></label>
+        </div>
+      </div>
+      <div class="inputs" id="inputs"><div class="inrow hd"><span>Input</span><span></span><span>Value</span><span>Unit</span><span>Range (design)</span></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ TRENDS -->
+<section class="view" id="view-trends" hidden>
+  <div class="figs">
+    <div class="pn pb"><figure><div class="chart" id="ch-q"></div><figcaption><b>Fig. 1.</b> Heat duties, kW, last 6 h of plant time.</figcaption></figure></div>
+    <div class="pn pb"><figure><div class="chart" id="ch-t"></div><figcaption><b>Fig. 2.</b> Chilled-water supply and evaporator temperature, °C. Shading: spread of the three networks.</figcaption></figure></div>
+    <div class="pn pb"><figure><div class="chart" id="ch-cop"></div><figcaption><b>Fig. 3.</b> COP over a trailing 30-min window, ΣQ<sub>evap</sub> / ΣQ<sub>gen</sub>.</figcaption></figure></div>
+    <div class="pn pb"><figure><div class="chart" id="ch-x"></div><figcaption><b>Fig. 4.</b> LiBr mass fraction of strong and weak solution, wt%. Crystallisation limit 64 wt%.</figcaption></figure></div>
+  </div>
+  <div class="pn"><div class="ph">Stream table <small>live · ≈ calculated from the model outputs · click a row to show it in 3D</small></div>
+    <div class="pb tw"><table class="bt" id="tbl-str"><thead><tr><th>Stream</th><th>From</th><th>To</th><th>Contents</th><th class="n">T, °C</th><th class="n">P, kPa</th><th class="n">LiBr, wt%</th><th class="n">Flow, kg/h</th><th>Phase</th></tr></thead><tbody></tbody></table></div></div>
+  <div class="cols2">
+    <div class="pn"><div class="ph">Model outputs <small>mean of 3 networks</small></div>
+      <div class="pb tw"><table class="bt" id="tbl-out"><thead><tr><th>Output</th><th>Symbol</th><th class="n">Value</th><th>Unit</th><th class="n">± spread</th><th class="n">Test RMSE</th></tr></thead><tbody></tbody></table></div></div>
+    <div style="display:grid;gap:10px;align-content:start">
+      <div class="pn"><div class="ph">Energy balance</div><div class="pb"><table class="bt" id="tbl-energy"><tbody></tbody></table>
+        <p class="note" style="margin-top:8px">Heat in should equal heat out at steady state (Aspen base case: 0.04 %). During transients the difference is heat stored in the metal and solution. The network was not given this balance.</p></div></div>
+      <div class="pn"><div class="ph">Water circuits</div><div class="pb tw"><table class="bt" id="tbl-water"><thead><tr><th>Circuit</th><th class="n">In, °C</th><th class="n">Out, °C</th><th class="n">Flow, kg/s</th></tr></thead><tbody></tbody></table></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ VALIDATION -->
+<section class="view" id="view-validation" hidden>
+  <article class="report">
+    <div><h2>Validation of the LSTM model</h2><p class="meta">34 held-out runs · 60 s step · compared with the MATLAB dynamic model</p></div>
+    <p class="lede">The network never saw these 34 runs during training. It is given only their seven inputs and has to predict every output, minute by minute, from a steady start.</p>
+    <h3>1 Summary</h3>
+    <div class="tw"><table class="bt" id="tbl-cmp"><thead><tr><th>Model</th><th class="n">Mean R²</th><th class="n">Min R²</th><th class="n">Mean NRMSE, %</th></tr></thead><tbody></tbody></table></div>
+    <p>Gradient boosting on current inputs alone has no memory, and the chiller needs 18–47 min to settle after a change, so it does poorly on transients. Adding lagged and filtered inputs helps. The LSTM, which carries its own state, is about five times more accurate again. The ensemble of three seeds is used on this site.</p>
+    <h3>2 Replay of a test run</h3>
+    <div class="ctl2"><label for="rp-run">Run<select id="rp-run"></select></label><label for="rp-out">Output<select id="rp-out"></select></label></div>
+    <div class="rstats" id="rp-stats"></div>
+    <figure><div class="chart" id="ch-rp"></div><figcaption><b>Fig. 5.</b> <span id="rp-cap"></span> Solid: MATLAB model. Dashed: LSTM, recomputed in this browser.</figcaption></figure>
+    <figure><div class="chart" id="ch-rp-in"></div><figcaption><b>Fig. 6.</b> Water inlet temperatures that drive the run, °C.</figcaption></figure>
+    <h3>3 Accuracy per output</h3>
+    <div class="tw"><table class="bt" id="tbl-met"><thead><tr><th>Output</th><th>Unit</th><th class="n">R²</th><th class="n">RMSE</th><th class="n">MAE</th><th class="n">NRMSE, %</th></tr></thead><tbody></tbody></table></div>
+    <p class="note">NRMSE is RMSE divided by the range of the output over the test runs. COP is computed from the predicted heat duties, not predicted on its own.</p>
+  </article>
+</section>
+
+<!-- ============================================================ NOTES -->
+<section class="view" id="view-notes" hidden>
+  <article class="report">
+    <div><h2>Notes on the model and the plant</h2><p class="meta">Single-effect H₂O–LiBr absorption chiller · 7th-semester project, Chemical Engineering, IIT Jodhpur · Nov 2026</p></div>
+    <h3>1 How the cycle works</h3>
+    <ol id="cycle"></ol>
+    <h3>2 How the twin was built</h3>
+    <ol>
+      <li>Steady state in Aspen Plus (ELECNRTL, true species). Generator duty assigned to DESAT, DFLASH made adiabatic; energy residual 0.04 %, COP 0.608.</li>
+      <li>Sensitivity study SENS-1: 163 physically valid cases.</li>
+      <li>Dynamic model in MATLAB: 9 ODEs, lumped vessels, ε-NTU exchangers, calibrated to the Aspen base case. 197 transient runs, 291 437 rows at 10 s; energy error ≤ 0.032 %.</li>
+      <li>Training in PyTorch: 2-layer LSTM, 128 units, full-sequence back-propagation, 600 epochs, 3 seeds. <span id="d-r2"></span></li>
+      <li>Weights exported and run step by step in JavaScript on this page; agreement with PyTorch within 0.002 kW.</li>
+    </ol>
+    <h3>3 Design point</h3>
+    <div class="tw"><table class="bt"><tbody>
+      <tr class="g"><td colspan="2">Internal state (Aspen)</td></tr>
+      <tr><td>Generator / condenser temperature</td><td class="n">89.89 / 46.14 °C</td></tr>
+      <tr><td>Evaporator / absorber outlet temperature</td><td class="n">1.74 / 33.30 °C</td></tr>
+      <tr><td>Weak / strong solution</td><td class="n">57.40 / 59.49 wt%</td></tr>
+      <tr><td>Solution pump / refrigerant flow</td><td class="n">3600 / 126.35 kg/h</td></tr>
+      <tr><td>Q<sub>gen</sub> / Q<sub>evap</sub></td><td class="n">133.3 / 81.1 kW</td></tr>
+      <tr><td>COP, Aspen / dynamic model</td><td class="n">0.608 / 0.589</td></tr>
+      <tr class="g"><td colspan="2">External water (chosen)</td></tr>
+      <tr><td>Hot water in, temperature drop</td><td class="n">105 °C, 8 K</td></tr>
+      <tr><td>Cooling water in (absorber, then condenser)</td><td class="n">27 °C</td></tr>
+      <tr><td>Chilled water in / out</td><td class="n">12 / 7 °C</td></tr>
+      <tr class="g"><td colspan="2">Thermal masses (assumed)</td></tr>
+      <tr><td>Generator / condenser / evaporator / absorber</td><td class="n">800 / 400 / 600 / 800 kJ/K</td></tr>
+      <tr><td>Solution hold-up, generator / absorber</td><td class="n">120 / 200 kg</td></tr>
+    </tbody></table></div>
+    <h3>4 Model card</h3>
+    <div class="tw"><table class="bt"><tbody id="tbl-card"></tbody></table></div>
+    <h3>5 Valid input range</h3>
+    <p>Predictions are only trusted inside the range covered by the training runs. The input controls stop at these limits.</p>
+    <div class="tw"><table class="bt" id="tbl-env"><thead><tr><th>Input</th><th class="n">Min</th><th class="n">Design</th><th class="n">Max</th></tr></thead><tbody></tbody></table></div>
+    <h3>6 Values calculated on this page</h3>
+    <p>The network predicts 16 outputs. The following stream values are derived from them and marked ≈ wherever they appear.</p>
+    <div class="tw"><table class="bt"><thead><tr><th>Value</th><th>Relation</th><th>Check</th></tr></thead><tbody>
+      <tr><td>Streams 3, A (SHX cold outlet)</td><td>T<sub>abs</sub> + 0.606 (T<sub>gen</sub> − T<sub>abs</sub>)</td><td>RMSE 0.85 K vs MATLAB</td></tr>
+      <tr><td>Stream 5 (SHX hot outlet)</td><td>T<sub>gen</sub> − 0.645 (T<sub>gen</sub> − T<sub>abs</sub>)</td><td>RMSE 0.95 K vs MATLAB</td></tr>
+      <tr><td>Stream 6</td><td>Dühring equilibrium of x<sub>strong</sub> at P<sub>low</sub></td><td>39.5 vs 38.2 °C in Aspen</td></tr>
+      <tr><td>Stream 7</td><td>T<sub>gen</sub> − 11.5 K (DESHEAT3 in Aspen)</td><td>design value</td></tr>
+      <tr><td>Flash fraction, stream 9</td><td>c<sub>p</sub>(T<sub>cond</sub> − T<sub>evap</sub>) / h<sub>fg</sub></td><td>7.08 % in Aspen</td></tr>
+      <tr><td>QSHX</td><td>ṁ<sub>strong</sub> · 1.93 kJ/kg K · (T<sub>gen</sub> − T<sub>5</sub>)</td><td>68 kW in Aspen</td></tr>
+    </tbody></table></div>
+    <h3>7 Limitations</h3>
+    <ul>
+      <li>The network reproduces the MATLAB model, not a real chiller. Its accuracy on real plant data depends on that model, in particular the assumed thermal masses and heat-transfer coefficients.</li>
+      <li>Runs that crystallised (x<sub>strong</sub> &gt; 64 wt%) or froze (T<sub>evap</sub> &lt; 0 °C) were removed from training. The page warns before those limits but cannot predict behaviour past them.</li>
+      <li>The equipment in the 3D view is generic and not to scale. Only the arrangement follows the Aspen flowsheet.</li>
+    </ul>
+    <h3>8 Terms</h3>
+    <dl>
+      <dt>Weak / strong solution</dt><dd>LiBr solution before and after water is boiled out of it in the generator (about 57.4 and 59.5 wt% at design).</dd>
+      <dt>COP</dt><dd>Cooling delivered divided by heat supplied. About 0.6 for a single-effect machine.</dd>
+      <dt>TR</dt><dd>Ton of refrigeration, 3.517 kW.</dd>
+      <dt>Crystallisation</dt><dd>LiBr coming out of solution when it is too concentrated or too cold; it blocks the solution circuit.</dd>
+      <dt>High / low side</dt><dd>Generator and condenser at about 8 kPa; evaporator and absorber at about 0.7 kPa, where water boils near 2 °C.</dd>
+      <dt>LSTM</dt><dd>A recurrent neural network with an internal memory, suited to systems that respond slowly.</dd>
+      <dt>Ensemble spread</dt><dd>The difference between the three networks; a rough measure of confidence.</dd>
+      <dt>R², RMSE, NRMSE</dt><dd>Goodness of fit (1 is perfect), typical error in the output's unit, and that error as a percentage of the output's range.</dd>
+    </dl>
+    <h3>References</h3>
+    <ol class="refs">
+      <li>Herold, K.E., Radermacher, R., Klein, S.A. <i>Absorption Chillers and Heat Pumps</i>, 2nd ed. CRC Press, 2016.</li>
+      <li>Kohlenbach, P., Ziegler, F. A dynamic simulation model for transient absorption chiller performance. Part I: The model. <i>International Journal of Refrigeration</i> 31 (2008) 217–225.</li>
+      <li>ASHRAE Handbook — Fundamentals, chapter on thermophysical properties of refrigerants (H₂O–LiBr Dühring and enthalpy correlations).</li>
+      <li>Hochreiter, S., Schmidhuber, J. Long short-term memory. <i>Neural Computation</i> 9 (1997) 1735–1780.</li>
+      <li>ANSI/ISA-101.01-2015, Human Machine Interfaces for Process Automation Systems.</li>
+    </ol>
+  </article>
+</section>
+</main>
+
+<div class="sbar"><div class="gut"><span id="sb-run">RUN</span><span id="sb-time">t 00:00</span><span id="sb-case" class="hide-s"></span><span id="sb-inf" class="hide-s"></span><span class="r hide-s">step 60 s · ensemble of 3</span></div></div>
+
+<script>/*__ENGINE__*/</script>
+<script>
+const D = /*__DATA__*/null;
+const $ = (s, el = document) => el.querySelector(s);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const fmt = (v, d) => (v == null || !isFinite(v)) ? '–' : v.toFixed(d);
+const hhmm = min => { const m = Math.max(0, Math.round(min)); return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(m % 60).padStart(2, '0'); };
+const T = Object.fromEntries(D.targets.map((n, i) => [n, i]));
+const X_CRYST = 64, T_FREEZE = 0, COPW = 30, HIST = 360;
+const EPS_C = 0.606, EPS_H = 0.645, CP_SOL = 1.93, DT_DS3 = 89.893 - 78.4;
+
+const NAMES = {
+  T_hw_in_C: ['Heat source temperature', '°C', 'hot', 'Hot water coming in to drive the chiller'],
+  m_hw_kg_s: ['Hot water flow', 'kg/s', 'hot', ''],
+  T_cw_in_C: ['Cooling tower water temperature', '°C', 'cool', 'Rises on hot days. It carries heat out of the absorber and condenser.'],
+  m_cw_kg_s: ['Cooling water flow', 'kg/s', 'cool', ''],
+  T_chw_in_C: ['Building return water temperature', '°C', 'chill', 'Warmer return water means the building needs more cooling'],
+  m_chw_kg_s: ['Chilled water flow', 'kg/s', 'chill', ''],
+  m_pump_kg_s: ['Solution pump flow', 'kg/s', 'weak', ''],
+  Q_evap_kW: ['Cooling made (evaporator)', 'kW'], T_chw_out_C: ['Chilled water to building', '°C'], Q_gen_kW: ['Heat used (generator)', 'kW'],
+  Q_cond_kW: ['Heat out at condenser', 'kW'], Q_abs_kW: ['Heat out at absorber', 'kW'], T_hw_out_C: ['Hot water leaving', '°C'],
+  T_cw_out_C: ['Cooling water leaving', '°C'], T_gen_C: ['Generator temperature', '°C'], T_cond_C: ['Condenser temperature', '°C'],
+  T_evap_C: ['Evaporator temperature', '°C'], T_abs_C: ['Absorber temperature', '°C'], x_strong_wt: ['Strong solution salt', 'wt%'],
+  x_weak_wt: ['Weak solution salt', 'wt%'], P_high_kPa: ['High-side pressure', 'kPa'], P_low_kPa: ['Low-side pressure', 'kPa'],
+  m_ref_gen_kg_s: ['Water boiled off (refrigerant)', 'kg/s'], COP_avg30: ['Efficiency, COP (30-min)', '–'],
+};
+const DEC = { kW: 1, '°C': 2, 'wt%': 2, kPa: 3, 'kg/s': 4, '–': 3 };
+
+/* ================================================================ stream values from the AI outputs */
+function duhring(x, Tref) {
+  const A = [-2.00755, 0.16976, -3.133362e-3, 1.97668e-5], B = [124.937, -7.71649, 0.152286, -7.95090e-4];
+  return (B[0] + x * (B[1] + x * (B[2] + x * B[3]))) + Tref * (A[0] + x * (A[1] + x * (A[2] + x * A[3])));
+}
+const KIND = { weak: ['--weak', 'Weak LiBr solution'], strong: ['--strong', 'Strong LiBr solution'], mix: ['--weak', 'Boiling solution'],
+  vap: ['--vap', 'Water vapour'], liq: ['--ref', 'Liquid water'], flash: ['--ref', 'Water, partly flashed'], heat: ['--heat', 'Heat (no flow)'] };
+function plantState(y, u) {
+  const Tg = y[T.T_gen_C], Ta = y[T.T_abs_C], Tc = y[T.T_cond_C], Te = y[T.T_evap_C], xs = y[T.x_strong_wt], xw = y[T.x_weak_wt];
+  const Ph = y[T.P_high_kPa], Pl = y[T.P_low_kPa], mr = y[T.m_ref_gen_kg_s] * 3600, mp = u[6] * 3600, ms = mp - mr;
+  const T3 = Ta + EPS_C * (Tg - Ta), T5 = Tg - EPS_H * (Tg - Ta), T6 = Math.min(T5, duhring(xs, Te));
+  const vf9 = 4.186 * (Tc - Te) / (2501 - 2.37 * Te), qshx = ms / 3600 * CP_SOL * (Tg - T5);
+  const Tcw_mid = u[2] + y[T.Q_abs_kW] / (u[3] * 4.186);
+  const weak = (T_, P_) => ({ kind: 'weak', T: T_, P: P_, x: xw, m: mp, ph: 'Liquid' });
+  const S = {
+    '1A': { from: 'ABSORB', to: 'PUMP', ...weak(Ta, Pl) },
+    '1': { from: 'ABSORB', to: 'PUMP', ...weak(Ta, Pl) },
+    '2': { from: 'PUMP', to: 'COLD', ...weak(Ta, Ph) },
+    '3': { from: 'COLD', to: 'DESHEAT1', ...weak(T3, Ph), est: 1 },
+    'A': { from: 'DESHEAT1', to: 'DESAT', ...weak(T3, Ph), est: 1 },
+    'B': { from: 'DESAT', to: 'DFLASH', kind: 'mix', T: Tg, P: Ph, x: xw, m: mp, ph: `Liquid + ${(100 * mr / mp).toFixed(1)} % vapour` },
+    'C': { from: 'DFLASH', to: 'DESHEAT3', kind: 'vap', T: Tg, P: Ph, x: 0, m: mr, ph: 'Vapour' },
+    '7': { from: 'DESHEAT3', to: 'CONDENS', kind: 'vap', T: Tg - DT_DS3, P: Ph, x: 0, m: mr, ph: 'Vapour', est: 1 },
+    '8': { from: 'CONDENS', to: 'VALVE', kind: 'liq', T: Tc, P: Ph, x: 0, m: mr, ph: 'Liquid' },
+    '9': { from: 'VALVE', to: 'EVAP', kind: 'flash', T: Te, P: Pl, x: 0, m: mr, ph: `Liquid + ≈ ${(100 * vf9).toFixed(1)} % vapour` },
+    '10': { from: 'EVAP', to: 'ABSORB', kind: 'vap', T: Te, P: Pl, x: 0, m: mr, ph: 'Vapour' },
+    '4': { from: 'DFLASH', to: 'HOT', kind: 'strong', T: Tg, P: Ph, x: xs, m: ms, ph: 'Liquid' },
+    '5': { from: 'HOT', to: 'SOLVALVE', kind: 'strong', T: T5, P: Ph, x: xs, m: ms, ph: 'Liquid', est: 1 },
+    '6': { from: 'SOLVALVE', to: 'ABSORB', kind: 'strong', T: T6, P: Pl, x: xs, m: ms, ph: 'Liquid + flash vapour', est: 1 },
+    'QSHX': { from: 'HOT', to: 'COLD', kind: 'heat', Q: qshx, T: null, P: null, x: null, m: null, ph: `Heat ≈ ${qshx.toFixed(1)} kW`, est: 1 },
+  };
+  return { S, y, u, Tg, Ta, Tc, Te, xs, xw, Ph, Pl, mr, mp, ms, T3, T5, T6, vf9, qshx, Tcw_mid };
+}
+
+
+/* ================================================================ charts (plot-style: framed axes, outward ticks, legend box) */
+function niceTicks(lo, hi, n = 5) {
+  const span = hi - lo || 1, step0 = span / n, mag = Math.pow(10, Math.floor(Math.log10(step0)));
+  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => s >= step0) || 10 * mag;
+  const out = []; for (let v = Math.ceil(lo / step) * step; v <= hi + 1e-9; v += step) out.push(+v.toFixed(10));
+  return { ticks: out, step };
+}
+class LineChart {
+  constructor(el, o = {}) {
+    this.el = el; this.o = Object.assign({ height: 230, dec: 1, unit: '', xfmt: hhmm }, o);
+    this.cv = document.createElement('canvas'); this.cv.style.height = this.o.height + 'px'; el.appendChild(this.cv);
+    this.tip = document.createElement('div'); this.tip.className = 'tip'; this.tip.hidden = true; el.appendChild(this.tip);
+    this.x = []; this.series = []; this.extra = {};
+    const move = e => { const r = this.cv.getBoundingClientRect(); this.hx = e.clientX - r.left; this.draw(); };
+    this.cv.addEventListener('pointermove', move); this.cv.addEventListener('pointerdown', move);
+    this.cv.addEventListener('pointerleave', () => { this.hx = null; this.draw(); });
+    new ResizeObserver(() => this.draw()).observe(el);
+  }
+  set(x, series, extra = {}) { this.x = x; this.series = series; this.extra = extra; this.draw(); }
+  draw() {
+    const cv = this.cv, w = this.el.clientWidth, h = this.o.height, dpr = window.devicePixelRatio || 1;
+    if (!w) return;
+    if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
+    const c = cv.getContext('2d'); c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, w, h);
+    const x = this.x, S = this.series; if (!x.length) return;
+    const ink = css('--ink'), ink2 = css('--ink-2'), line = css('--line-2'), font = css('--f-mono');
+    let lo = Infinity, hi = -Infinity;
+    S.forEach(s => { s.data.forEach(v => { if (v < lo) lo = v; if (v > hi) hi = v; });
+      if (s.band) { s.band[0].forEach(v => lo = Math.min(lo, v)); s.band[1].forEach(v => hi = Math.max(hi, v)); } });
+    if (this.o.minSpan && hi - lo < this.o.minSpan) { const m = (hi + lo) / 2; lo = m - this.o.minSpan / 2; hi = m + this.o.minSpan / 2; }
+    const pad = (hi - lo) * 0.1 || 1; lo -= pad; hi += pad * (S.length > 1 ? 2.2 : 1);   // headroom for the legend
+    const { ticks, step } = niceTicks(lo, hi, 4), tdec = Math.max(0, -Math.floor(Math.log10(step) + 1e-9));
+    c.font = `11px ${font}`;
+    const L = Math.max(...ticks.map(t => c.measureText(t.toFixed(tdec)).width)) + 12, R = w - 10, Tp = 6, B = h - 22;
+    const x0 = x[0], x1 = Math.max(x[x.length - 1], x0 + (this.o.minX || 1));
+    const X = v => L + (v - x0) / (x1 - x0) * (R - L), Y = v => B - (v - lo) / (hi - lo) * (B - Tp);
+    c.save(); c.setLineDash([1, 3]); c.strokeStyle = line; c.lineWidth = 1;
+    ticks.forEach(t => { const y = Math.round(Y(t)) + .5; if (y < Tp || y > B) return; c.beginPath(); c.moveTo(L, y); c.lineTo(R, y); c.stroke(); });
+    c.restore();
+    c.fillStyle = ink2; c.strokeStyle = ink; c.lineWidth = 1; c.textAlign = 'right'; c.textBaseline = 'middle';
+    ticks.forEach(t => { const y = Math.round(Y(t)) + .5; if (y < Tp || y > B) return; c.beginPath(); c.moveTo(L - 4, y); c.lineTo(L, y); c.stroke(); c.fillText(t.toFixed(tdec), L - 6, y); });
+    const xt = niceTicks(x0 / 60, x1 / 60, Math.max(2, Math.floor((R - L) / 85)));
+    c.textAlign = 'center'; c.textBaseline = 'top';
+    xt.ticks.forEach(t => { const px = Math.round(X(t * 60)) + .5; if (px < L - 1 || px > R + 1) return; c.beginPath(); c.moveTo(px, B); c.lineTo(px, B + 4); c.stroke(); c.fillText(this.o.xfmt(t * 60), px, B + 6); });
+    c.save(); c.beginPath(); c.rect(L, Tp, R - L, B - Tp); c.clip();
+    (this.extra.refs || []).forEach(r => { if (r.v < lo || r.v > hi) return; const y = Math.round(Y(r.v)) + .5;
+      c.save(); c.setLineDash([6, 3]); c.strokeStyle = css(r.color); c.beginPath(); c.moveTo(L, y); c.lineTo(R, y); c.stroke(); c.restore();
+      c.fillStyle = css(r.color); c.textAlign = 'right'; c.textBaseline = 'bottom'; c.fillText(r.label, R - 4, y - 2); });
+    S.forEach(s => { if (!s.band) return; c.fillStyle = css(s.color); c.globalAlpha = .18; c.beginPath();
+      s.band[1].forEach((v, i) => i ? c.lineTo(X(x[i]), Y(v)) : c.moveTo(X(x[i]), Y(v)));
+      for (let i = x.length - 1; i >= 0; i--) c.lineTo(X(x[i]), Y(s.band[0][i])); c.closePath(); c.fill(); c.globalAlpha = 1; });
+    S.forEach(s => { c.strokeStyle = css(s.color); c.lineWidth = s.width || 1.6; c.setLineDash(s.dash || []); c.lineJoin = 'round'; c.beginPath();
+      s.data.forEach((v, i) => i ? c.lineTo(X(x[i]), Y(v)) : c.moveTo(X(x[i]), Y(v))); c.stroke(); c.setLineDash([]); });
+    c.restore();
+    c.strokeStyle = ink; c.lineWidth = 1; c.strokeRect(L + .5, Tp + .5, R - L - 1, B - Tp - 1);
+    if (S.length > 1) {      // legend box, top-left inside the frame
+      c.font = `11.5px ${css('--f-ui')}`; let lx = L + 8; const ly = Tp + 8, ent = S.map(s => s.name);
+      const wd = ent.map(t => c.measureText(t).width + 30), tot = wd.reduce((a, b) => a + b, 0) + 6;
+      if (tot < R - L - 16) {
+        c.fillStyle = css('--panel'); c.fillRect(lx - 4, ly - 3, tot, 18); c.strokeStyle = line; c.strokeRect(lx - 3.5, ly - 2.5, tot - 1, 17);
+        S.forEach((s, i) => { c.strokeStyle = css(s.color); c.lineWidth = s.width || 1.6; c.setLineDash(s.dash || []); c.beginPath(); c.moveTo(lx, ly + 6.5); c.lineTo(lx + 18, ly + 6.5); c.stroke(); c.setLineDash([]);
+          c.fillStyle = ink; c.textAlign = 'left'; c.textBaseline = 'middle'; c.fillText(s.name, lx + 23, ly + 7); lx += wd[i]; });
+      } else {
+        const bw = Math.max(...wd) + 6; c.fillStyle = css('--panel'); c.fillRect(lx - 4, ly - 3, bw, S.length * 16 + 4); c.strokeStyle = line; c.strokeRect(lx - 3.5, ly - 2.5, bw - 1, S.length * 16 + 3);
+        S.forEach((s, i) => { const yy = ly + 6.5 + i * 16; c.strokeStyle = css(s.color); c.lineWidth = s.width || 1.6; c.setLineDash(s.dash || []); c.beginPath(); c.moveTo(lx, yy); c.lineTo(lx + 18, yy); c.stroke(); c.setLineDash([]);
+          c.fillStyle = ink; c.textAlign = 'left'; c.textBaseline = 'middle'; c.fillText(s.name, lx + 23, yy + .5); });
+      }
+    }
+    if (this.hx != null && this.hx >= L && this.hx <= R) {
+      const xv = x0 + (this.hx - L) / (R - L) * (x1 - x0); let i = 0, best = Infinity;
+      x.forEach((v, k) => { const d = Math.abs(v - xv); if (d < best) { best = d; i = k; } });
+      const px = Math.round(X(x[i])) + .5; c.strokeStyle = ink2; c.lineWidth = 1; c.setLineDash([2, 2]); c.beginPath(); c.moveTo(px, Tp); c.lineTo(px, B); c.stroke(); c.setLineDash([]);
+      this.tip.innerHTML = `<div class="num" style="color:var(--muted)">t = ${this.o.xfmt(x[i])}</div>` + S.map(s =>
+        `<div class="row"><i style="background:var(${s.color})"></i>${s.name} <b>${fmt(s.data[i], s.dec ?? this.o.dec)}</b>${this.o.unit ? ' ' + this.o.unit : ''}</div>`).join('');
+      this.tip.hidden = false; const tw = this.tip.offsetWidth;
+      this.tip.style.left = (px + 10 + tw > w ? Math.max(0, px - tw - 10) : px + 10) + 'px'; this.tip.style.top = (Tp + 30) + 'px';
+    } else this.tip.hidden = true;
+  }
+}
+
+/* ================================================================ scenarios + live twin */
+const U0 = D.u0.slice(), RNG = D.inputs.map(n => D.input_range[n]);
+const clampU = u => u.map((v, k) => Math.min(RNG[k][1], Math.max(RNG[k][0], v)));
+const ramp = (t, t0, t1, a, b) => t <= t0 ? a : t >= t1 ? b : a + (b - a) * (t - t0) / (t1 - t0);
+const SCN = [
+  { id: 'manual', name: 'Design point, manual inputs', desc: 'Design conditions. Change any input below and the model predicts how the plant responds over the following hour.' },
+  { id: 'solar', name: 'Solar day, 12 h', desc: 'Solar collectors heat the hot water to 109 °C at noon. The cooling water and the building load also rise with the outdoor temperature, then everything falls in the evening.',
+    f: t => { const s = Math.sin(Math.PI * Math.min(t, 720) / 720); const u = U0.slice(); u[0] = 92 + 17 * s; u[2] = 25 + 4 * s; u[4] = 11 + 3 * s; return u; } },
+  { id: 'hwdrop', name: 'Hot water 105 → 90 °C', desc: 'At 00:30 the hot water falls from 105 to 90 °C, as when a boiler goes to low fire. Cooling falls gradually over about 20 minutes, not instantly.',
+    f: t => { const u = U0.slice(); u[0] = t < 30 ? 105 : 90; return u; } },
+  { id: 'heatwave', name: 'Cooling water 27 → 32 °C', desc: 'Between 00:30 and 01:30 the cooling tower water warms from 27 to 32 °C. A warmer absorber absorbs less vapour, so the chiller makes less cooling.',
+    f: t => { const u = U0.slice(); u[2] = ramp(t, 30, 90, 27, 31.9); return u; } },
+  { id: 'load', name: 'Chilled return 12 → 15 °C', desc: 'At 00:30 the building load jumps and its water comes back at 15 °C instead of 12 °C. The evaporator warms up and the chiller makes more cooling without any control action.',
+    f: t => { const u = U0.slice(); u[4] = t < 30 ? 12 : 15; return u; } },
+  { id: 'startup', name: 'Warm start, 80 → 105 °C', desc: 'The plant idles on 80 °C hot water. Between 00:15 and 00:25 the heat source rises to 105 °C and the chiller ramps up.',
+    f: t => { const u = U0.slice(); u[0] = ramp(t, 15, 25, 80, 105); return u; } },
+  { id: 'pump', name: 'Solution pump to 85 %', desc: 'At 00:30 the solution pump slows to 85 % of its design flow. Less solution circulates, so it leaves the generator saltier. Watch the crystallisation margin.',
+    f: t => { const u = U0.slice(); u[6] = t < 30 ? 1.0 : 0.85; return u; } },
+];
+const twin = new TwinEngine.Twin(D);
+const S = { scn: SCN[1], t: 0, u: U0.slice(), running: true, speed: 5, acc: 0, hist: null, st: null };
+function newHist() { return { t: [], y: D.targets.map(() => []), lo: [], hi: [], cop: [], qe: [], qg: [] }; }
+function pushStep(r) {
+  const H = S.hist; H.t.push(S.t); D.targets.forEach((n, j) => H.y[j].push(r.mean[j])); H.lo.push(r.lo); H.hi.push(r.hi);
+  H.qe.push(r.mean[T.Q_evap_kW]); H.qg.push(r.mean[T.Q_gen_kW]);
+  let se = 0, sg = 0; for (let i = Math.max(0, H.qe.length - COPW); i < H.qe.length; i++) { se += H.qe[i]; sg += H.qg[i]; }
+  H.cop.push(se / sg);
+  if (H.t.length > HIST + 1) { H.t.shift(); H.y.forEach(a => a.shift()); H.lo.shift(); H.hi.shift(); H.cop.shift(); }
+  if (H.qe.length > COPW) { H.qe.shift(); H.qg.shift(); }
+  S.st = plantState(r.mean, S.u);
+}
+function restart() {
+  S.t = 0; S.hist = newHist(); S.u = S.scn.f ? clampU(S.scn.f(0)) : S.u.slice();
+  const r = twin.reset(S.u);
+  for (let i = 0; i < COPW - 1; i++) { S.hist.qe.push(r.mean[T.Q_evap_kW]); S.hist.qg.push(r.mean[T.Q_gen_kW]); }
+  pushStep(r); render();
+}
+function stepOnce() { S.t += 1; if (S.scn.f) S.u = clampU(S.scn.f(S.t)); pushStep(twin.step(S.u)); }
+
+
+/* ================================================================ controls */
+function setScn(s, doRestart) {
+  S.scn = s; $('#scn').value = s.id; $('#scn-desc').textContent = s.desc;
+  if (doRestart) restart();
+}
+SCN.forEach(s => $('#scn').add(new Option(s.name, s.id)));
+$('#scn').addEventListener('change', () => { const s = SCN.find(x => x.id === $('#scn').value); if (s.id === 'manual') S.u = U0.slice(); setScn(s, true); });
+setScn(S.scn, false);
+$('#btn-play').addEventListener('click', () => { S.running = !S.running; updRun(); });
+$('#btn-reset').addEventListener('click', () => { if (!S.scn.f) S.u = U0.slice(); restart(); });
+$('#speed').addEventListener('change', () => { S.speed = +$('#speed').value; });
+function setText(id, s) { const e = document.getElementById(id); if (e && e.textContent !== s) e.textContent = s; }
+function updRun() { $('#btn-play').textContent = S.running ? 'Pause' : 'Run'; setText('sb-run', S.running ? 'RUN' : 'HOLD'); }
+const SL = [];
+D.inputs.forEach((n, k) => {
+  const [lab, unit, col] = NAMES[n], [a, b] = RNG[k], dec = unit === '°C' ? 1 : 2, step = unit === '°C' ? 0.1 : 0.01;
+  const row = document.createElement('div'); row.className = 'inrow';
+  row.innerHTML = `<label class="nm" for="in-${k}"><i class="sq" style="--c:var(--${col})"></i>${lab}</label>
+    <input type="range" id="in-${k}" min="${a}" max="${b}" step="${(b - a) / 200}" aria-label="${lab}">
+    <input type="number" id="nb-${k}" min="${a.toFixed(dec)}" max="${b.toFixed(dec)}" step="${step}" aria-label="${lab} value">
+    <span>${unit}</span><span class="rg">${a.toFixed(dec)}–${b.toFixed(dec)} (${U0[k].toFixed(dec)})</span>`;
+  $('#inputs').appendChild(row);
+  const inp = row.querySelector('input[type=range]'), nb = row.querySelector('input[type=number]');
+  const setU = v => { if (S.scn.f) setScn(SCN[0], false); S.u[k] = Math.min(b, Math.max(a, v)); };
+  inp.addEventListener('input', () => { setU(+inp.value); nb.value = S.u[k].toFixed(dec); });
+  nb.addEventListener('change', () => { const v = parseFloat(nb.value); if (isFinite(v)) setU(v); nb.value = S.u[k].toFixed(dec); inp.value = S.u[k]; });
+  SL.push({ inp, nb, k, dec });
+});
+
+/* ================================================================ readout strip */
+const RO = [
+  { id: 'qe', l: 'Cooling output', u: 'kW', dec: 1, v: st => st.y[T.Q_evap_kW], s: v => `${(v / 3.517).toFixed(1)} TR` },
+  { id: 'cop', l: 'COP, 30 min', u: '', dec: 3, v: (st, H) => H.cop[H.cop.length - 1], s: () => 'cooling ÷ heat in' },
+  { id: 'tchw', l: 'Chilled water supply', u: '°C', dec: 2, v: st => st.y[T.T_chw_out_C], s: v => `set 7.0 · ${v >= 7 ? '+' : '−'}${Math.abs(v - 7).toFixed(2)} K` },
+  { id: 'qg', l: 'Heat input', u: 'kW', dec: 1, v: st => st.y[T.Q_gen_kW], s: st => `hot water ${S.u[0].toFixed(1)} °C` },
+  { id: 'xs', l: 'Margin to crystallisation', u: 'wt%', dec: 2, v: st => X_CRYST - st.xs, s: (v, st) => `x strong ${st.xs.toFixed(2)} / 64`, lim: v => v > 2 ? '' : v > 0.8 ? 'warn' : 'bad' },
+  { id: 'te', l: 'Margin to freezing', u: 'K', dec: 2, v: st => st.Te - T_FREEZE, s: (v, st) => `T evap ${st.Te.toFixed(2)} °C`, lim: v => v > 1 ? '' : v > 0.3 ? 'warn' : 'bad' },
+];
+$('#ro').innerHTML = RO.map(r => `<div class="ro" id="ro-${r.id}"><div class="l">${r.l}<span class="flag"></span></div><div class="v"><b>–</b><span>${r.u}</span></div><div class="s"></div></div>`).join('');
+
+/* ================================================================ plain-language descriptions */
+const EQ = {
+  PUMP: { name: 'Solution pump', what: 'Pushes the weak salt solution from the low-pressure absorber up to the high-pressure generator. It is the only moving machine in the cycle and uses very little power.',
+    kv: st => [['Solution flow', `${st.mp.toFixed(0)} kg/h`], ['Pressure lifted', `${st.Pl.toFixed(3)} → ${st.Ph.toFixed(2)} kPa`], ['Solution temperature', `${st.Ta.toFixed(2)} °C`], ['Salt content', `${st.xw.toFixed(2)} wt%`]] },
+  COLD: { name: 'Solution HX, cold side', what: 'The cold weak solution is warmed for free by the hot strong solution coming back from the generator (block HOT). This saves heat. HOT and COLD are the two sides of one solution heat exchanger.',
+    kv: st => [['Solution in', `${st.Ta.toFixed(2)} °C`], ['Solution out', `≈ ${st.T3.toFixed(1)} °C`], ['Heat recovered', `≈ ${st.qshx.toFixed(1)} kW`]] },
+  DESHEAT1: { name: 'Preheater, zero duty', what: 'In the corrected Aspen model this stage has zero duty, so the solution passes straight through to the generator. It is kept here so the plant matches the flowsheet.',
+    kv: st => [['Solution temperature', `≈ ${st.T3.toFixed(1)} °C`], ['Heat duty', '0 kW']] },
+  DESAT: { name: 'Generator', what: 'Hot water boils some of the water out of the salt solution. This is where the chiller takes in the heat that drives it. The steam goes on to make cold, and the solution left behind is saltier (strong).',
+    kv: st => [['Heat taken in', `${st.y[T.Q_gen_kW].toFixed(1)} kW`], ['Generator temperature', `${st.Tg.toFixed(2)} °C`], ['Pressure', `${st.Ph.toFixed(2)} kPa`],
+      ['Hot water in → out', `${st.u[0].toFixed(1)} → ${st.y[T.T_hw_out_C].toFixed(1)} °C`], ['Water boiled off', `${st.mr.toFixed(1)} kg/h`]] },
+  DFLASH: { name: 'Steam separator', what: 'Separates the boiling mixture. Steam leaves from the top to the condenser, and the strong salt solution leaves from the bottom.',
+    kv: st => [['Steam out (top)', `${st.mr.toFixed(1)} kg/h`], ['Strong solution out (bottom)', `${st.ms.toFixed(0)} kg/h`], ['Salt content', `${st.xs.toFixed(2)} wt%`], ['Temperature', `${st.Tg.toFixed(2)} °C`]] },
+  DESHEAT3: { name: 'Steam cooler', what: 'Takes a little extra heat (superheat) out of the steam before it reaches the condenser. Its duty is tiny, about 0.8 kW at design.',
+    kv: st => [['Steam in', `${st.Tg.toFixed(1)} °C`], ['Steam out', `≈ ${(st.Tg - DT_DS3).toFixed(1)} °C`]] },
+  CONDENS: { name: 'Condenser', what: 'Cooling water turns the steam back into liquid water. The heat this releases goes to the cooling tower.',
+    kv: st => [['Heat removed', `${st.y[T.Q_cond_kW].toFixed(1)} kW`], ['Condensing temperature', `${st.Tc.toFixed(2)} °C`], ['Pressure', `${st.Ph.toFixed(2)} kPa`],
+      ['Cooling water in → out', `≈ ${st.Tcw_mid.toFixed(1)} → ${st.y[T.T_cw_out_C].toFixed(1)} °C`]] },
+  VALVE: { name: 'Expansion valve', what: 'Drops the liquid water to a deep vacuum, under one hundredth of normal air pressure. Part of it flashes to vapour and the rest cools to about 2 °C.',
+    kv: st => [['Pressure', `${st.Ph.toFixed(2)} → ${st.Pl.toFixed(3)} kPa`], ['Temperature', `${st.Tc.toFixed(1)} → ${st.Te.toFixed(2)} °C`], ['Flashed to vapour', `≈ ${(100 * st.vf9).toFixed(1)} %`]] },
+  EVAP: { name: 'Evaporator', what: 'The water boils at about 2 °C and takes heat from the building’s chilled water. This is the useful cooling effect.',
+    kv: st => [['Cooling made', `${st.y[T.Q_evap_kW].toFixed(1)} kW`], ['Boiling temperature', `${st.Te.toFixed(2)} °C`], ['Pressure', `${st.Pl.toFixed(3)} kPa`],
+      ['Chilled water in → out', `${st.u[4].toFixed(1)} → ${st.y[T.T_chw_out_C].toFixed(2)} °C`], ['Chilled water flow', `${st.u[5].toFixed(2)} kg/s`]] },
+  ABSORB: { name: 'Absorber', what: 'The strong salt solution soaks up the water vapour coming from the evaporator. LiBr attracts water strongly, and this keeps the evaporator under a deep vacuum. Cooling water removes the heat released. The solution becomes weak again and returns to the pump.',
+    kv: st => [['Heat removed', `${st.y[T.Q_abs_kW].toFixed(1)} kW`], ['Absorber temperature', `${st.Ta.toFixed(2)} °C`], ['Pressure', `${st.Pl.toFixed(3)} kPa`],
+      ['Salt in → out', `${st.xs.toFixed(2)} → ${st.xw.toFixed(2)} wt%`], ['Cooling water in → out', `${st.u[2].toFixed(1)} → ≈ ${st.Tcw_mid.toFixed(1)} °C`]] },
+  HOT: { name: 'Solution HX, hot side', what: 'The hot strong solution from the generator gives its heat to the cold weak solution (block COLD) before returning to the absorber.',
+    kv: st => [['Solution in', `${st.Tg.toFixed(2)} °C`], ['Solution out', `≈ ${st.T5.toFixed(1)} °C`], ['Heat given', `≈ ${st.qshx.toFixed(1)} kW`]] },
+  SOLVALVE: { name: 'Solution valve', what: 'Drops the strong solution back down to the low pressure of the absorber.',
+    kv: st => [['Pressure', `${st.Ph.toFixed(2)} → ${st.Pl.toFixed(3)} kPa`], ['Temperature', `≈ ${st.T5.toFixed(1)} → ${st.T6.toFixed(1)} °C`]] },
+};
+const TOUR = [
+  ['PUMP', 'The pump sends weak salt solution from the absorber up to the high-pressure side.'],
+  ['COLD', 'On the way, the solution is pre-heated for free by the hot solution coming back.'],
+  ['DESAT', 'Hot water boils water vapour out of the solution. This heat drives the whole chiller.'],
+  ['DFLASH', 'The steam goes up to the condenser. The saltier solution goes down and back.'],
+  ['CONDENS', 'Cooling water turns the steam into liquid water.'],
+  ['VALVE', 'The liquid drops to a deep vacuum and cools to about 2 °C.'],
+  ['EVAP', 'The water boils at about 2 °C, taking heat from the building’s water. This is the cooling effect.'],
+  ['ABSORB', 'The salt solution soaks up the vapour and becomes weak again. Back to the pump.'],
+  ['HOT', 'The hot strong solution gives its heat to the incoming cold solution, then returns through the solution valve.'],
+];
+const streamName = id => id === 'QSHX' ? 'Heat link QSHX' : 'Stream ' + id;
+
+
+const BTYPE = { PUMP: 'Pump', COLD: 'Heater (cold side of SHX)', HOT: 'Heater (hot side of SHX)', DESHEAT1: 'Heater', DESAT: 'Heater', DFLASH: 'Flash2',
+  DESHEAT3: 'Heater', CONDENS: 'Heater', EVAP: 'Heater', ABSORB: 'Heater', VALVE: 'Valve', SOLVALVE: 'Valve' };
+
+/* ================================================================ 3D plant (equipment drawn in code, laid out like the Aspen flowsheet) */
+const P3 = (px, py, h) => new THREE.Vector3((px - 760) / 38, h, (py - 340) / 38);
+const HC = 1.3, K = 1.5;   // K: equipment scale; pipe heights are given at equipment scale 1
+const LAYOUT = {
+  PUMP: [95, 245], COLD: [545, 553], DESHEAT1: [255, 270], DESAT: [437, 174], DFLASH: [537, 333], DESHEAT3: [700, 129],
+  CONDENS: [1058, 73], VALVE: [1273, 303], EVAP: [1367, 509], ABSORB: [942, 326], HOT: [731, 378], SOLVALVE: [823, 378],
+};
+const PIPES = [
+  { id: '2', pts: [[78, 245, .95], [78, 245, HC], [150, 245, HC], [150, 553, HC], [545, 553, HC]], tag: [322, 553] },
+  { id: '3', pts: [[545, 553, HC], [600, 553, HC], [600, 412, HC], [211, 412, HC], [211, 270, HC], [255, 270, HC]], tag: [398, 412] },
+  { id: 'A', pts: [[255, 270, HC], [345, 270, HC], [345, 174, HC], [437, 174, HC]], tag: [345, 222] },
+  { id: 'B', pts: [[437, 174, HC], [488, 174, HC], [488, 333, HC], [537, 333, HC]], tag: [488, 255] },
+  { id: 'C', pts: [[537, 333, 2.75], [537, 333, 3.0], [537, 255, 3.0], [654, 255, 3.0], [654, 255, HC], [654, 129, HC], [700, 129, HC]], tag: [600, 255], th: 3.0, rack: true },
+  { id: '7', pts: [[700, 129, HC], [866, 129, HC], [866, 73, HC], [1058, 73, HC]], tag: [945, 73] },
+  { id: '8', pts: [[1058, 73, HC], [1180, 73, HC], [1180, 303, HC], [1273, 303, HC]], tag: [1180, 191] },
+  { id: '9', pts: [[1273, 303, HC], [1310, 303, HC], [1310, 509, HC], [1367, 509, HC]], tag: [1310, 408] },
+  { id: '10', pts: [[1367, 509, HC], [1500, 509, HC], [1500, 597, HC], [908, 597, HC], [908, 326, HC], [908, 326, 2.15], [942, 326, 2.15], [942, 326, 1.8]], tag: [1159, 597] },
+  { id: '4', pts: [[537, 333, .5], [537, 378, .5], [680, 378, .5], [680, 378, HC], [731, 378, HC]], tag: [621, 378], th: .5 },
+  { id: '5', pts: [[731, 378, HC], [823, 378, HC]], tag: [787, 378] },
+  { id: '6', pts: [[823, 378, HC], [880, 378, HC], [880, 326, HC], [942, 326, HC]], tag: [880, 350] },
+  { id: '1A', pts: [[942, 326, HC], [1080, 326, HC], [1080, 326, 3.6], [1080, 660, 3.6], [40, 660, 3.6], [40, 245, 3.6], [40, 245, .62], [74, 245, .62]], tag: [1080, 470], th: 3.6, rack: true },
+  { id: 'QSHX', pts: [[731, 378, HC], [731, 410, HC], [693, 410, HC], [693, 597, HC], [545, 597, HC], [545, 553, HC]], tag: [693, 503], heat: true },
+];
+const STAG1 = [40, 420, 3.6];   // extra tag "1" on the return line near the pump (Aspen cycle break 1A / 1)
+const WATER = [
+  { id: 'hw', kind: 'hot', pts: [[200, 22, 3.0], [437, 22, 3.0], [437, 174, 3.0], [437, 174, 2.0]], lab: 'in', at: [200, 22, 3.0] },
+  { id: 'hw2', kind: 'hot', pts: [[470, 174, 2.0], [470, 174, 3.0], [470, 22, 3.0], [610, 22, 3.0]], lab: 'out', at: [610, 22, 3.0] },
+  { id: 'cw', kind: 'cool', pts: [[800, 255, 2.7], [965, 255, 2.7], [965, 326, 2.7], [965, 326, 2.0]], lab: 'in', at: [800, 255, 2.7] },
+  { id: 'cw2', kind: 'cool', pts: [[985, 326, 2.0], [985, 326, 2.7], [985, 22, 2.7], [1040, 22, 2.7], [1040, 73, 2.7], [1040, 73, 1.9]] },
+  { id: 'cw3', kind: 'cool', pts: [[1076, 73, 1.9], [1076, 73, 2.7], [1076, 0, 2.7], [1260, 0, 2.7]], lab: 'out', at: [1260, 0, 2.7] },
+  { id: 'chw', kind: 'chill', pts: [[1350, 690, 2.5], [1350, 509, 2.5], [1350, 509, 1.95]], lab: 'in', at: [1350, 690, 2.5] },
+  { id: 'chw2', kind: 'chill', pts: [[1386, 509, 1.95], [1386, 509, 2.5], [1386, 690, 2.5]], lab: 'out', at: [1386, 700, 2.5] },
+];
+
+let P = null;
+function init3D() {
+  const vp = $('#vp');
+  if (!window.THREE || !THREE.OrbitControls || !THREE.CSS2DRenderer) { vp.insertAdjacentHTML('beforeend', '<div class="nogl"><p>The 3D view needs an internet connection the first time, to load the three.js library. All the numbers below still work.</p></div>'); return null; }
+  let renderer;
+  try { renderer = new THREE.WebGLRenderer({ antialias: true }); }
+  catch (e) { vp.insertAdjacentHTML('beforeend', '<div class="nogl"><p>This browser cannot show 3D because WebGL is turned off. All the numbers below still work.</p></div>'); return null; }
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  renderer.outputEncoding = THREE.sRGBEncoding; renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.82;
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  vp.prepend(renderer.domElement);
+  const labels = new THREE.CSS2DRenderer(); labels.domElement.className = 'css2d'; vp.insertBefore(labels.domElement, vp.querySelector('.vp-legend'));
+  const scene = new THREE.Scene();
+  const pmrem = new THREE.PMREMGenerator(renderer); scene.environment = pmrem.fromScene(new THREE.RoomEnvironment(), 0.04).texture;
+  const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 400);
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true; controls.dampingFactor = 0.08; controls.maxPolarAngle = Math.PI / 2 - 0.04; controls.minDistance = 4; controls.maxDistance = 75;
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x445566, 0.35));
+  const sun = new THREE.DirectionalLight(0xffffff, 1.2); sun.position.set(-14, 26, 16); sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 20, bottom: -20, near: 1, far: 90 }); sun.shadow.bias = -0.0004;
+  scene.add(sun);
+
+  const M = {
+    steel: new THREE.MeshStandardMaterial({ color: 0xc8cdd3, metalness: 0.85, roughness: 0.3 }),
+    dark: new THREE.MeshStandardMaterial({ color: 0x59626b, metalness: 0.7, roughness: 0.45 }),
+    paint: new THREE.MeshStandardMaterial({ color: 0x3b4652, metalness: 0.2, roughness: 0.7 }),
+    flange: new THREE.MeshStandardMaterial({ color: 0xa9b1b9, metalness: 0.9, roughness: 0.35 }),
+    bolt: new THREE.MeshStandardMaterial({ color: 0x2b3137, metalness: 0.6, roughness: 0.5 }),
+    blue: new THREE.MeshStandardMaterial({ color: 0x2b5c9e, metalness: 0.3, roughness: 0.5 }),
+    red: new THREE.MeshStandardMaterial({ color: 0xc23b2b, metalness: 0.3, roughness: 0.5 }),
+    yellow: new THREE.MeshStandardMaterial({ color: 0xe0a81e, metalness: 0.2, roughness: 0.6 }),
+    glass: new THREE.MeshStandardMaterial({ color: 0xdde8f0, metalness: 0, roughness: 0.05, transparent: true, opacity: 0.35 }),
+    concrete: new THREE.MeshStandardMaterial({ color: 0x9aa3ab, metalness: 0, roughness: 0.95 }),
+  };
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(240, 240), new THREE.MeshStandardMaterial({ color: 0xc7cfd7, roughness: 1 }));
+  ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+  const pad = new THREE.Mesh(new THREE.BoxGeometry(44, 0.16, 24), M.concrete); pad.position.set(0.8, 0.08, 1.4); pad.receiveShadow = true; scene.add(pad);
+  const grid = new THREE.GridHelper(44, 44, 0x8893a0, 0x8893a0); grid.position.set(0.8, 0.165, 1.4); grid.scale.z = 24 / 44; grid.material.opacity = 0.18; grid.material.transparent = true; scene.add(grid);
+
+  const mesh = (geo, mat, parent) => { const m = new THREE.Mesh(geo, mat); m.castShadow = true; m.receiveShadow = true; if (parent) parent.add(m); return m; };
+  const boltRing = (parent, n, R, x, mat) => {
+    const im = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.022, 0.022, 0.14, 6), mat, n), o = new THREE.Object3D();
+    for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2; o.position.set(x, Math.cos(a) * R, Math.sin(a) * R); o.rotation.set(0, 0, Math.PI / 2); o.updateMatrix(); im.setMatrixAt(i, o.matrix); }
+    im.castShadow = true; parent.add(im);
+  };
+  const nozzle = (parent, x, y, z, r, dir, mat) => {
+    const g = new THREE.Group(); mesh(new THREE.CylinderGeometry(r, r, 0.28, 20), mat, g).position.y = 0.14;
+    mesh(new THREE.CylinderGeometry(r * 1.7, r * 1.7, 0.05, 24), M.flange, g).position.y = 0.28;
+    g.position.set(x, y, z); if (dir === 'down') g.rotation.x = Math.PI; parent.add(g);
+  };
+
+  function shellTube(len, r, bandColor) {         // shell-and-tube exchanger, axis along x
+    const g = new THREE.Group(), body = new THREE.Group(); body.position.y = HC; g.add(body);
+    const m = M.steel.clone(); g.userData.mats = [m];
+    mesh(new THREE.CylinderGeometry(r, r, len, 56, 1, true), m, body).rotation.z = Math.PI / 2;
+    const dome = new THREE.SphereGeometry(r, 48, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+    const hr = mesh(dome, m, body); hr.scale.set(1, 0.42, 1); hr.rotation.z = -Math.PI / 2; hr.position.x = len / 2;
+    const ch = mesh(new THREE.CylinderGeometry(r, r, 0.42, 56, 1, true), M.dark, body); ch.rotation.z = Math.PI / 2; ch.position.x = -len / 2 - 0.21;
+    const hl = mesh(dome, M.dark, body); hl.scale.set(1, 0.42, 1); hl.rotation.z = Math.PI / 2; hl.position.x = -len / 2 - 0.42;
+    [-len / 2, -len / 2 - 0.42].forEach(x => { const f = mesh(new THREE.CylinderGeometry(r * 1.13, r * 1.13, 0.07, 56), M.flange, body); f.rotation.z = Math.PI / 2; f.position.x = x; boltRing(body, 20, r * 1.07, x, M.bolt); });
+    const b = mesh(new THREE.CylinderGeometry(r * 1.012, r * 1.012, 0.16, 48), new THREE.MeshStandardMaterial({ color: bandColor, roughness: 0.55, metalness: 0.1 }), body); b.rotation.z = Math.PI / 2; b.position.x = -len * 0.18;
+    const h0 = HC - r;
+    [-len * 0.3, len * 0.3].forEach(x => {
+      mesh(new THREE.BoxGeometry(0.16, h0 + r * 0.35, r * 1.5), M.paint, g).position.set(x, (h0 + r * 0.35) / 2 + 0.16, 0);
+      mesh(new THREE.BoxGeometry(0.42, 0.05, r * 1.7), M.paint, g).position.set(x, 0.185, 0);
+    });
+    nozzle(body, -len / 2 - 0.21, r * 0.98, 0, 0.07, 'up', M.dark); nozzle(body, -len / 2 - 0.21, -r * 0.98, 0, 0.07, 'down', M.dark);
+    nozzle(body, len * 0.32, r * 0.98, 0, 0.09, 'up', m);
+    mesh(new THREE.BoxGeometry(0.3, 0.17, 0.012), new THREE.MeshStandardMaterial({ color: 0x1d2730, metalness: 0.4, roughness: 0.4 }), body).position.set(0, 0, r + 0.006);
+    return g;
+  }
+  function drum() {                              // vertical flash separator
+    const g = new THREE.Group(), m = M.steel.clone(); g.userData.mats = [m];
+    const r = 0.5, h = 1.6, y0 = 0.75;
+    mesh(new THREE.CylinderGeometry(r, r, h, 56, 1, true), m, g).position.y = y0 + h / 2;
+    const dome = new THREE.SphereGeometry(r, 48, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+    const top = mesh(dome, m, g); top.scale.set(1, 0.45, 1); top.position.y = y0 + h;
+    const bot = mesh(dome, m, g); bot.scale.set(1, 0.45, 1); bot.rotation.x = Math.PI; bot.position.y = y0;
+    for (let i = 0; i < 4; i++) { const a = i * Math.PI / 2 + Math.PI / 4; mesh(new THREE.CylinderGeometry(0.04, 0.04, y0 + 0.1, 10), M.paint, g).position.set(Math.cos(a) * r * 0.85, (y0 + 0.1) / 2 + 0.16, Math.sin(a) * r * 0.85); }
+    const ring = mesh(new THREE.TorusGeometry(r * 1.01, 0.03, 8, 56), M.flange, g); ring.rotation.x = Math.PI / 2; ring.position.y = y0 + h * 0.62;
+    mesh(new THREE.CylinderGeometry(0.035, 0.035, 1.0, 12), M.glass, g).position.set(0, y0 + 0.75, r + 0.12);
+    mesh(new THREE.CylinderGeometry(0.026, 0.026, 0.45, 12), new THREE.MeshStandardMaterial({ color: 0x8f5a1d, roughness: 0.3 }), g).position.set(0, y0 + 0.48, r + 0.12);
+    [y0 + 0.25, y0 + 1.25].forEach(y => mesh(new THREE.BoxGeometry(0.04, 0.04, 0.14), M.dark, g).position.set(0, y, r + 0.06));
+    nozzle(g, 0, y0 + h + 0.2, 0, 0.1, 'up', m);
+    return g;
+  }
+  function plateHX() {                           // plate heat exchanger, one side of the SHX
+    const g = new THREE.Group(), m = M.steel.clone(); g.userData.mats = [m];
+    [-0.5, 0.5].forEach(x => mesh(new THREE.BoxGeometry(0.1, 1.3, 0.85), M.blue, g).position.set(x, HC, 0));
+    const n = 22, im = new THREE.InstancedMesh(new THREE.BoxGeometry(0.03, 1.08, 0.7), m, n), o = new THREE.Object3D();
+    for (let i = 0; i < n; i++) { o.position.set(-0.4 + i * 0.038, HC, 0); o.updateMatrix(); im.setMatrixAt(i, o.matrix); }
+    im.castShadow = true; g.add(im);
+    [0.66, -0.66].forEach(dy => { const bar = mesh(new THREE.CylinderGeometry(0.045, 0.045, 1.5, 14), M.flange, g); bar.rotation.z = Math.PI / 2; bar.position.set(0.15, HC + dy, 0); });
+    [[0.33, 0.55], [-0.33, 0.55], [0.33, -0.55], [-0.33, -0.55]].forEach(([dz, dy]) => { const b = mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.25, 8), M.bolt, g); b.rotation.z = Math.PI / 2; b.position.set(0, HC + dy, dz); });
+    [-0.5, 0.5].forEach(x => mesh(new THREE.BoxGeometry(0.16, HC - 0.62, 0.7), M.paint, g).position.set(x, (HC - 0.62) / 2 + 0.16, 0));
+    [[-0.3, 0.38], [0.3, 0.38], [-0.3, -0.38], [0.3, -0.38]].forEach(([dz, dy]) => { const s = new THREE.Group(); s.position.set(-0.55, HC + dy, dz); s.rotation.z = Math.PI / 2; g.add(s);
+      mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.18, 16), M.flange, s).position.y = 0.09; });
+    return g;
+  }
+  function pump() {                              // centrifugal pump + motor on a baseplate
+    const g = new THREE.Group(), m = M.blue.clone(); g.userData.mats = [m];
+    mesh(new THREE.BoxGeometry(1.9, 0.1, 0.7), M.paint, g).position.y = 0.21;
+    const motor = mesh(new THREE.CylinderGeometry(0.26, 0.26, 0.8, 32), m, g); motor.rotation.z = Math.PI / 2; motor.position.set(0.45, 0.6, 0);
+    const fins = new THREE.InstancedMesh(new THREE.BoxGeometry(0.72, 0.05, 0.02), m, 16), o = new THREE.Object3D();
+    for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2; o.position.set(0.45, 0.6 + Math.cos(a) * 0.27, Math.sin(a) * 0.27); o.rotation.set(a, 0, 0); o.updateMatrix(); fins.setMatrixAt(i, o.matrix); }
+    fins.castShadow = true; g.add(fins);
+    const cowl = mesh(new THREE.CylinderGeometry(0.27, 0.24, 0.16, 32), M.dark, g); cowl.rotation.z = Math.PI / 2; cowl.position.set(0.93, 0.6, 0);
+    mesh(new THREE.BoxGeometry(0.55, 0.2, 0.42), m, g).position.set(0.45, 0.33, 0);
+    const guard = mesh(new THREE.CylinderGeometry(0.15, 0.15, 0.3, 24, 1, false, 0, Math.PI), M.yellow, g); guard.rotation.z = Math.PI / 2; guard.position.set(-0.1, 0.6, 0);
+    const shaft = mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.3, 12), M.flange, g); shaft.rotation.z = Math.PI / 2; shaft.position.set(-0.1, 0.6, 0);
+    const coupling = mesh(new THREE.BoxGeometry(0.04, 0.22, 0.05), M.bolt, g); coupling.position.set(-0.1, 0.6, 0); g.userData.spin = coupling;
+    const volute = mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.24, 36), M.red, g); volute.rotation.z = Math.PI / 2; volute.position.set(-0.45, 0.62, 0);
+    const lip = mesh(new THREE.TorusGeometry(0.3, 0.04, 10, 36), M.red, g); lip.rotation.y = Math.PI / 2; lip.position.set(-0.45, 0.62, 0);
+    mesh(new THREE.BoxGeometry(0.4, 0.2, 0.35), M.red, g).position.set(-0.45, 0.33, 0);
+    const suc = new THREE.Group(); suc.position.set(-0.57, 0.62, 0); suc.rotation.z = Math.PI / 2; g.add(suc);
+    mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.3, 16), M.red, suc).position.y = 0.15;
+    nozzle(g, -0.45, 0.9, 0, 0.07, 'up', M.red);
+    return g;
+  }
+  function valve() {                             // globe valve with handwheel
+    const g = new THREE.Group(), m = M.dark.clone(); g.userData.mats = [m];
+    const body = mesh(new THREE.SphereGeometry(0.19, 28, 18), m, g); body.position.y = HC; body.scale.set(1.2, 1, 1);
+    [-0.28, 0.28].forEach(x => { const f = mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.06, 24), M.flange, g); f.rotation.z = Math.PI / 2; f.position.set(x, HC, 0);
+      const s = mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.2, 18), m, g); s.rotation.z = Math.PI / 2; s.position.set(x * 0.7, HC, 0); });
+    mesh(new THREE.CylinderGeometry(0.09, 0.12, 0.28, 18), m, g).position.y = HC + 0.3;
+    mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.32, 8), M.flange, g).position.y = HC + 0.58;
+    const wheel = new THREE.Group(); wheel.position.y = HC + 0.72; g.add(wheel);
+    mesh(new THREE.TorusGeometry(0.17, 0.022, 10, 36), M.red, wheel).rotation.x = Math.PI / 2;
+    for (let i = 0; i < 3; i++) mesh(new THREE.BoxGeometry(0.34, 0.02, 0.02), M.red, wheel).rotation.y = i * Math.PI / 3;
+    mesh(new THREE.CylinderGeometry(0.035, 0.035, HC - 0.3, 10), M.paint, g).position.y = (HC - 0.3) / 2 + 0.16;
+    return g;
+  }
+
+  const EQUIP = {}, picks = [];
+  const add = (key, obj, labelH) => {
+    const [px, py] = LAYOUT[key]; obj.position.copy(P3(px, py, 0)); obj.scale.setScalar(K); obj.userData.key = key; scene.add(obj); EQUIP[key] = obj;
+    obj.traverse(o => { if (o.isMesh) { o.userData.pick = key; picks.push(o); } });
+    const el = document.createElement('div'); el.className = 'tag3d'; el.innerHTML = `<b>${key}</b><span>${EQ[key].name}</span><em></em>`; el.title = EQ[key].name;
+    el.addEventListener('click', e => { e.stopPropagation(); select(key); });
+    const lab = new THREE.CSS2DObject(el); lab.position.set(0, labelH, 0); obj.add(lab); obj.userData.tag = el;
+  };
+  add('PUMP', pump(), 1.5);
+  add('COLD', plateHX(), 2.45);
+  add('DESHEAT1', shellTube(1.5, 0.34, 0xc9922f), 2.1);
+  add('DESAT', shellTube(2.4, 0.56, 0xd0532a), 3.45);
+  add('DFLASH', drum(), 3.45);
+  add('DESHEAT3', shellTube(1.4, 0.32, 0x8d9aa8), 2.05);
+  add('CONDENS', shellTube(2.6, 0.55, 0x138f86), 3.2);
+  add('VALVE', valve(), 2.3);
+  add('EVAP', shellTube(2.6, 0.58, 0x2a78d6), 3.25);
+  add('ABSORB', shellTube(2.6, 0.6, 0x138f86), 3.25);
+  add('HOT', plateHX(), 2.45);
+  add('SOLVALVE', valve(), 2.3);
+
+  function chevronTex() {
+    const c = document.createElement('canvas'); c.width = 128; c.height = 32; const x = c.getContext('2d');
+    x.fillStyle = '#000'; x.fillRect(0, 0, 128, 32); x.fillStyle = '#fff';
+    x.beginPath(); x.moveTo(40, 0); x.lineTo(76, 16); x.lineTo(40, 32); x.lineTo(58, 32); x.lineTo(94, 16); x.lineTo(58, 0); x.closePath(); x.fill();
+    const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
+  }
+  function pathOf(pts) {
+    const v = pts.map(p => P3(p[0], p[1], p[2] * K)), path = new THREE.CurvePath();
+    let prev = v[0];
+    for (let i = 1; i < v.length; i++) {
+      const a = v[i - 1], b = v[i], c = v[i + 1];
+      if (!c) { if (b.distanceTo(prev) > 1e-4) path.add(new THREE.LineCurve3(prev, b)); break; }
+      const d1 = b.clone().sub(a), d2 = c.clone().sub(b), r = Math.min(0.22, d1.length() / 2, d2.length() / 2);
+      const p1 = b.clone().sub(d1.normalize().multiplyScalar(r)), p2 = b.clone().add(d2.normalize().multiplyScalar(r));
+      if (p1.distanceTo(prev) > 1e-4) path.add(new THREE.LineCurve3(prev, p1));
+      path.add(new THREE.QuadraticBezierCurve3(p1, b, p2)); prev = p2;
+    }
+    return path;
+  }
+  const tex0 = chevronTex(), PIPE = {}, WT = {};
+  function pipe(pts, colorVar, r, opts = {}) {
+    const path = pathOf(pts), len = path.getLength(), geo = new THREE.TubeGeometry(path, Math.max(24, Math.round(len * 12)), r, 14, false);
+    const tex = tex0.clone(); tex.needsUpdate = true; tex.repeat.set(len / 0.55, 1);
+    const mat = new THREE.MeshStandardMaterial({ metalness: 0.35, roughness: 0.45, emissiveMap: tex, emissiveIntensity: 0.9, transparent: !!opts.ghost, opacity: opts.ghost ? 0.7 : 1 });
+    const m = mesh(geo, mat); scene.add(m); if (opts.pick) { m.userData.pick = opts.pick; picks.push(m); }
+    if (opts.rack) {
+      const n = Math.max(2, Math.floor(len / 5.5));
+      for (let i = 1; i < n; i++) { const p = path.getPointAt(i / n); if (p.y < 2.4 * K) continue;
+        mesh(new THREE.CylinderGeometry(0.05, 0.05, p.y - 0.16, 8), M.paint, scene).position.set(p.x, (p.y - 0.16) / 2 + 0.16, p.z);
+        mesh(new THREE.BoxGeometry(0.4, 0.06, 0.4), M.paint, scene).position.set(p.x, p.y - r - 0.03, p.z); }
+    }
+    return { m, mat, tex, path, len, colorVar };
+  }
+  PIPES.forEach(p => {
+    const k = S.st.S[p.id].kind, cv = p.heat ? '--heat' : KIND[k][0];
+    const r = 1.25 * (p.heat ? 0.035 : (k === 'vap' ? 0.1 : (k === 'liq' || k === 'flash') ? 0.055 : 0.075));
+    PIPE[p.id] = pipe(p.pts, cv, r, { pick: 's:' + p.id, rack: p.rack, ghost: p.heat });
+    const el = document.createElement('div'); el.className = 'stag'; el.style.setProperty('--c', `var(${cv})`);
+    el.innerHTML = `${p.id}<small></small>`; el.addEventListener('click', e => { e.stopPropagation(); select('s:' + p.id); });
+    const lab = new THREE.CSS2DObject(el); lab.position.copy(P3(p.tag[0], p.tag[1], ((p.th || HC) + 0.3) * K)); scene.add(lab); PIPE[p.id].tag = el;
+  });
+  { const el = document.createElement('div'); el.className = 'stag'; el.style.setProperty('--c', 'var(--weak)'); el.innerHTML = '1<small></small>';
+    el.addEventListener('click', e => { e.stopPropagation(); select('s:1A'); });
+    const lab = new THREE.CSS2DObject(el); lab.position.copy(P3(STAG1[0], STAG1[1], (STAG1[2] + 0.3) * K)); scene.add(lab); PIPE['1A'].tag2 = el; }
+  WATER.forEach(w => {
+    const cv = '--' + w.kind; WT[w.id] = pipe(w.pts, cv, 0.08, { rack: true });
+    if (w.lab) { const el = document.createElement('div'); el.className = 'wtag'; el.style.setProperty('--c', `var(${cv})`);
+      const lab = new THREE.CSS2DObject(el); lab.position.copy(P3(w.at[0], w.at[1], (w.at[2] + 0.3) * K)); scene.add(lab); WT[w.id].tag = el; }
+  });
+
+  const ray = new THREE.Raycaster(), ptr = new THREE.Vector2(); let down = null;
+  renderer.domElement.addEventListener('pointerdown', e => { down = [e.clientX, e.clientY]; });
+  renderer.domElement.addEventListener('pointerup', e => {
+    if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 5) return;
+    const r = renderer.domElement.getBoundingClientRect(); ptr.set((e.clientX - r.left) / r.width * 2 - 1, -(e.clientY - r.top) / r.height * 2 + 1);
+    ray.setFromCamera(ptr, camera); const hit = ray.intersectObjects(picks, false)[0];
+    select(hit ? hit.object.userData.pick : null, { noFly: !hit });
+  });
+  function resize() { const w = vp.clientWidth, h = vp.clientHeight; if (!w || !h) return; renderer.setSize(w, h); labels.setSize(w, h); camera.aspect = w / h; camera.updateProjectionMatrix(); }
+  new ResizeObserver(resize).observe(vp); resize();
+
+  let fly = null;
+  const HOME = { pos: new THREE.Vector3(-1.5, 25, 30), tgt: new THREE.Vector3(0.8, 0.8, 1.6) };
+  const TOP = { pos: new THREE.Vector3(0.8, 40, 1.9), tgt: new THREE.Vector3(0.8, 0, 1.2) };
+  function flyTo(pos, tgt, ms = 1100) {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) { camera.position.copy(pos); controls.target.copy(tgt); return; }
+    fly = { p0: camera.position.clone(), t0: controls.target.clone(), p1: pos.clone(), t1: tgt.clone(), s: performance.now(), ms };
+  }
+  function focus(key) {
+    const c = key.startsWith('s:') ? PIPE[key.slice(2)].path.getPointAt(0.5) : EQUIP[key].position.clone().add(new THREE.Vector3(0, 1.6, 0));
+    flyTo(c.clone().add(new THREE.Vector3(-4, 6.5, 10)), c);
+  }
+  const homePos = () => HOME.tgt.clone().add(HOME.pos.clone().sub(HOME.tgt).multiplyScalar(Math.min(2.3, Math.max(1, 1.5 / camera.aspect))));
+  camera.position.copy(homePos()); controls.target.copy(HOME.tgt);
+
+  function applyTheme() {
+    scene.background = new THREE.Color(css('--scene')); ground.material.color.set(css('--ground')); M.concrete.color.set(css('--pad')); grid.material.color.set(css('--line-2'));
+    scene.fog = new THREE.Fog(scene.background, 70, 160);
+    [...Object.values(PIPE), ...Object.values(WT)].forEach(p => { const c = new THREE.Color(css(p.colorVar)); p.mat.emissive.copy(c); p.mat.color.copy(c).multiplyScalar(0.8); });
+  }
+  applyTheme();
+
+  let sel = null, last = performance.now(), dcl = 0;
+  const PRI = ['EVAP', 'DESAT', 'CONDENS', 'ABSORB', 'PUMP', 'DFLASH', 'COLD', 'HOT', 'VALVE', 'SOLVALVE', 'DESHEAT3', 'DESHEAT1'];
+  function declutter() {          // hide lower-priority labels that would overlap a higher-priority one
+    const order = [];
+    if (sel) order.push(sel.startsWith('s:') ? PIPE[sel.slice(2)].tag : EQUIP[sel].userData.tag);
+    PRI.forEach(k => order.push(EQUIP[k].userData.tag));
+    Object.values(PIPE).forEach(p => { order.push(p.tag); if (p.tag2) order.push(p.tag2); });
+    Object.values(WT).forEach(w => { if (w.tag) order.push(w.tag); });
+    const placed = [], seen = new Set();
+    order.forEach(el => { if (seen.has(el)) return; seen.add(el); el.style.visibility = 'visible';
+      const r = el.getBoundingClientRect(); if (!r.width) return;
+      const hit = placed.some(q => r.left < q.right + 3 && r.right > q.left - 3 && r.top < q.bottom + 2 && r.bottom > q.top - 2);
+      if (hit) el.style.visibility = 'hidden'; else placed.push(r); });
+  }
+  function setSel(key) {
+    Object.values(EQUIP).forEach(o => { o.userData.mats.forEach(m => m.emissive.setHex(0x000000)); o.userData.tag.classList.toggle('sel', o.userData.key === key); });
+    Object.entries(PIPE).forEach(([id, p]) => { const on = key === 's:' + id; p.tag.classList.toggle('sel', on); if (p.tag2) p.tag2.classList.toggle('sel', on); p.mat.emissiveIntensity = 0.9; });
+    sel = key;
+  }
+  const speeds = {};
+  function update(st) {
+    PIPES.forEach(p => { const s = st.S[p.id];
+      const f = p.heat ? st.qshx / 68 : (s.kind === 'vap' || s.kind === 'liq' || s.kind === 'flash') ? st.mr / 126.35 : s.m / 3600;
+      speeds[p.id] = 0.55 * Math.max(0.15, f);
+      const txt = s.T == null ? ` ≈${s.Q.toFixed(0)} kW` : ` ${s.est ? '≈' : ''}${s.T.toFixed(1)}°C`;
+      const sm = PIPE[p.id].tag.lastElementChild; if (sm.textContent !== txt) sm.textContent = txt;
+      if (p.id === '1A') PIPE['1A'].tag2.lastElementChild.textContent = txt; });
+    const ratio = (k) => S.u[k] / U0[k];
+    const wv = { hw: [S.u[0], 'in', ratio(1)], hw2: [st.y[T.T_hw_out_C], 'out', ratio(1)], cw: [S.u[2], 'in', ratio(3)], cw2: [0, '', ratio(3)],
+      cw3: [st.y[T.T_cw_out_C], 'out', ratio(3)], chw: [S.u[4], 'in', ratio(5)], chw2: [st.y[T.T_chw_out_C], 'out', ratio(5)] };
+    const wn = { hot: 'Hot water', cool: 'Cooling water', chill: 'Chilled water' };
+    WATER.forEach(w => { const [v, io, f] = wv[w.id]; speeds['w' + w.id] = 0.7 * f; if (WT[w.id].tag) WT[w.id].tag.textContent = `${wn[w.kind]} ${io} ${v.toFixed(1)} °C`; });
+    const tv = { PUMP: `${st.mp.toFixed(0)} kg/h`, COLD: `≈ ${st.qshx.toFixed(0)} kW`, DESHEAT1: '0 kW', DESAT: `${st.y[T.Q_gen_kW].toFixed(1)} kW in · ${st.Tg.toFixed(1)} °C`,
+      DFLASH: `${st.mr.toFixed(0)} kg/h vap.`, DESHEAT3: `≈ ${(st.Tg - DT_DS3).toFixed(1)} °C out`, CONDENS: `${st.y[T.Q_cond_kW].toFixed(1)} kW out · ${st.Tc.toFixed(1)} °C`,
+      VALVE: `${st.Ph.toFixed(1)} → ${st.Pl.toFixed(2)} kPa`, EVAP: `${st.y[T.Q_evap_kW].toFixed(1)} kW · ${st.Te.toFixed(1)} °C`,
+      ABSORB: `${st.y[T.Q_abs_kW].toFixed(1)} kW out · ${st.Ta.toFixed(1)} °C`, HOT: `≈ ${st.T5.toFixed(1)} °C out`, SOLVALVE: `→ ${st.Pl.toFixed(2)} kPa` };
+    Object.entries(tv).forEach(([k, v]) => { const em = EQUIP[k].userData.tag.querySelector('em'); if (em.textContent !== v) em.textContent = v; });
+  }
+  function frame(now) {
+    const dt = Math.min(0.1, (now - last) / 1000); last = now;
+    if (!$('#view-plant').hidden && !document.hidden) {
+      if (fly) { const k = Math.min(1, (now - fly.s) / fly.ms), e = k < .5 ? 2 * k * k : 1 - Math.pow(-2 * k + 2, 2) / 2;
+        camera.position.lerpVectors(fly.p0, fly.p1, e); controls.target.lerpVectors(fly.t0, fly.t1, e); if (k >= 1) fly = null; }
+      controls.update();
+      const run = S.running ? 1 : 0, sp = 0.7 + 0.3 * Math.log10(S.speed) ;
+      PIPES.forEach(p => { PIPE[p.id].tex.offset.x -= (speeds[p.id] || 0.3) * dt * run * sp * 3; });
+      WATER.forEach(w => { WT[w.id].tex.offset.x -= (speeds['w' + w.id] || 0.5) * dt * run * sp * 3; });
+      EQUIP.PUMP.userData.spin.rotation.x += dt * run * 14 * (S.u[6] || 1);
+      if (sel) { const pulse = 0.22 + 0.18 * Math.sin(now / 260);
+        if (sel.startsWith('s:')) PIPE[sel.slice(2)].mat.emissiveIntensity = 1.5 + 0.6 * Math.sin(now / 200);
+        else { const acc = new THREE.Color(css('--accent')); EQUIP[sel].userData.mats.forEach(m => m.emissive.copy(acc).multiplyScalar(pulse)); } }
+      renderer.render(scene, camera); labels.render(scene, camera);
+      if (++dcl % 6 === 0) declutter();
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+  return { update, setSel, focus, home: () => flyTo(homePos(), HOME.tgt), top: () => flyTo(TOP.pos, TOP.tgt), applyTheme };
+}
+
+
+/* ================================================================ model browser + properties */
+const BLOCKS = ['PUMP', 'COLD', 'DESHEAT1', 'DESAT', 'DFLASH', 'DESHEAT3', 'CONDENS', 'VALVE', 'EVAP', 'ABSORB', 'HOT', 'SOLVALVE'];
+const STR_ORDER = ['1', '2', '3', 'A', 'B', 'C', '7', '8', '9', '10', '4', '5', '6', 'QSHX'];
+function buildTree() {
+  const st = S.st;
+  $('#tree').innerHTML = `<div><div class="tg">Blocks (${BLOCKS.length})</div>${BLOCKS.map(k => `<button type="button" class="trow" data-k="${k}"><span class="id">${k}</span><span class="nm">${EQ[k].name}</span></button>`).join('')}</div>
+    <div><div class="tg">Streams (${STR_ORDER.length})</div>${STR_ORDER.map(id => { const s = st.S[id];
+      return `<button type="button" class="trow" data-k="s:${id === '1' ? '1A' : id}"><span class="id"><i class="sq" style="--c:var(${KIND[s.kind][0]})"></i>${id === '1' ? '1/1A' : id}</span><span class="nm">${s.from} → ${s.to}</span></button>`; }).join('')}</div>
+    <div><div class="tg">Utilities</div><div class="urow"><span><i class="sq" style="--c:var(--hot)"></i> Hot water</span><span class="num" id="u-hw"></span></div>
+    <div class="urow"><span><i class="sq" style="--c:var(--cool)"></i> Cooling water</span><span class="num" id="u-cw"></span></div>
+    <div class="urow"><span><i class="sq" style="--c:var(--chill)"></i> Chilled water</span><span class="num" id="u-chw"></span></div></div>`;
+  $('#tree').addEventListener('click', e => { const b = e.target.closest('[data-k]'); if (b) select(b.dataset.k); });
+}
+let SEL = null, TOURI = -1, propsHover = false;
+function select(key, opts = {}) {
+  if (key === 's:1') key = 's:1A';
+  SEL = key; if (!opts.keepTour) TOURI = -1;
+  document.querySelectorAll('#tree .trow').forEach(r => r.classList.toggle('on', r.dataset.k === key));
+  if (P) { P.setSel(key); if (key && !opts.noFly) P.focus(key); }
+  renderInfo();
+}
+const kvRows = rows => rows.map(([a, b]) => `<tr><th>${a}</th><td>${b}</td></tr>`).join('');
+function renderInfo() {
+  const st = S.st, box = $('#props'); if (!st) return;
+  let html = '', h = 'Properties', hs = '';
+  if (TOURI >= 0) html += `<div class="tourbar"><span class="s">Tour, step ${TOURI + 1} of ${TOUR.length}</span><button class="btn" type="button" id="t-prev" ${TOURI === 0 ? 'disabled' : ''}>‹ Back</button><button class="btn pri" type="button" id="t-next">${TOURI === TOUR.length - 1 ? 'Finish' : 'Next ›'}</button><button class="btn" type="button" id="t-end">End</button></div>
+      <p class="desc">${TOUR[TOURI][1]}</p>`;
+  if (!SEL) {
+    hs = 'plant';
+    html += `<p class="desc">Select a block or stream in the model browser or in the 3D view to see its values. <button type="button" class="inl" id="i-tour">Take the tour</button> to follow the cycle in order.</p>
+      <table class="kv"><tbody>${kvRows([['Heat in, generator', `${st.y[T.Q_gen_kW].toFixed(1)} kW`], ['Heat in, evaporator (cooling)', `${st.y[T.Q_evap_kW].toFixed(1)} kW`],
+        ['Heat out, condenser', `${st.y[T.Q_cond_kW].toFixed(1)} kW`], ['Heat out, absorber', `${st.y[T.Q_abs_kW].toFixed(1)} kW`], ['Recovered in SHX', `≈ ${st.qshx.toFixed(1)} kW`],
+        ['High-side pressure', `${st.Ph.toFixed(2)} kPa`], ['Low-side pressure', `${st.Pl.toFixed(3)} kPa`], ['Refrigerant flow', `${st.mr.toFixed(1)} kg/h`], ['Solution flow', `${st.mp.toFixed(0)} kg/h`]])}</tbody></table>`;
+  } else if (SEL.startsWith('s:')) {
+    const id = SEL.slice(2), s = st.S[id], k = KIND[s.kind];
+    h = id === 'QSHX' ? 'Heat stream QSHX' : `Stream ${id === '1A' ? '1A / 1' : id}`; hs = `${s.from} → ${s.to}`;
+    html += `<div><h3>${k[1]}</h3><div class="sub">${s.from} → ${s.to}</div></div>
+      <p class="desc">${id === 'QSHX' ? 'Heat passed from the hot strong solution (HOT) to the cold weak solution (COLD). Not a flow of material.' : `From the ${EQ[s.from].name.toLowerCase()} to the ${EQ[s.to].name.toLowerCase()}.`}${id === '1A' ? ' Aspen tears the loop here (1A and 1) for convergence; physically one pipe.' : ''}</p>
+      <table class="kv"><tbody>${id === 'QSHX' ? kvRows([['Duty', `≈ ${s.Q.toFixed(1)} kW`]]) : kvRows([['Temperature', `${s.est ? '≈ ' : ''}${s.T.toFixed(2)} °C`],
+        ['Pressure', `${s.P.toFixed(3)} kPa`], ['LiBr mass fraction', s.x ? `${s.x.toFixed(2)} wt%` : '0'], ['Mass flow', `${s.m.toFixed(s.m < 500 ? 1 : 0)} kg/h`], ['Phase', s.ph]])}</tbody></table>
+      <p class="note">${s.est ? '≈ derived from the model outputs (see Notes, section 6).' : 'Taken directly from the model outputs.'}</p>`;
+  } else {
+    const e = EQ[SEL]; h = SEL; hs = BTYPE[SEL];
+    const conn = Object.entries(st.S).filter(([id, s]) => (s.from === SEL || s.to === SEL) && id !== '1');
+    html += `<div><h3>${e.name}</h3><div class="sub">Aspen block ${SEL} · ${BTYPE[SEL]}</div></div><p class="desc">${e.what}</p>
+      <table class="kv"><tbody>${kvRows(e.kv(st))}</tbody></table>
+      <div><div class="note" style="margin-bottom:4px">Connected streams</div><div class="linkrow">${conn.map(([id, s]) =>
+        `<button type="button" class="lk" data-s="${id}"><i class="sq" style="--c:var(${KIND[s.kind][0]})"></i>${id} ${s.from === SEL ? 'out' : 'in'}</button>`).join('')}</div></div>`;
+  }
+  if (SEL && TOURI < 0) html += `<div><button type="button" class="btn" id="i-back">Clear selection</button></div>`;
+  box.innerHTML = html; setText('props-h', h); setText('props-hs', hs);
+  box.querySelectorAll('[data-s]').forEach(b => b.addEventListener('click', () => select('s:' + b.dataset.s)));
+  const on = (id, f) => { const b = document.getElementById(id); if (b) b.addEventListener('click', f); };
+  on('i-tour', startTour); on('i-back', () => { select(null); if (P) P.home(); });
+  on('t-next', () => TOURI < TOUR.length - 1 ? tourGo(TOURI + 1) : endTour()); on('t-prev', () => tourGo(TOURI - 1)); on('t-end', endTour);
+}
+$('#props').addEventListener('pointerenter', () => { propsHover = true; });
+$('#props').addEventListener('pointerleave', () => { propsHover = false; });
+function startTour() { tourGo(0); }
+function tourGo(i) { TOURI = i; select(TOUR[i][0], { keepTour: true }); }
+function endTour() { TOURI = -1; select(null); if (P) P.home(); }
+
+/* ================================================================ trends & tables */
+const chQ = new LineChart($('#ch-q'), { unit: 'kW', dec: 1, minX: 60 });
+const chT = new LineChart($('#ch-t'), { unit: '°C', dec: 2, minSpan: 1, minX: 60 });
+const chC = new LineChart($('#ch-cop'), { unit: '', dec: 3, minSpan: 0.02, minX: 60 });
+const chX = new LineChart($('#ch-x'), { unit: 'wt%', dec: 2, minSpan: 1, minX: 60 });
+const RMSE = Object.fromEntries(D.metrics.map(m => [m.output, m.RMSE]));
+const GROUPS = [['Heat duties', ['Q_evap_kW', 'Q_gen_kW', 'Q_cond_kW', 'Q_abs_kW']], ['Water outlets', ['T_chw_out_C', 'T_hw_out_C', 'T_cw_out_C']],
+  ['Internal state', ['T_gen_C', 'T_cond_C', 'T_evap_C', 'T_abs_C', 'x_strong_wt', 'x_weak_wt', 'P_high_kPa', 'P_low_kPa', 'm_ref_gen_kg_s']]];
+$('#tbl-out tbody').innerHTML = GROUPS.map(([g, ns]) => `<tr class="g"><td colspan="6">${g}</td></tr>` + ns.map(n => { const u = NAMES[n][1];
+  return `<tr><td>${NAMES[n][0]}</td><td class="num muted" style="font-size:12px">${n}</td><td class="n" id="o-${n}"></td><td>${u}</td><td class="n" id="s-${n}"></td><td class="n">${fmt(RMSE[n], DEC[u] + 1)}</td></tr>`; }).join('')).join('');
+$('#tbl-str tbody').innerHTML = STR_ORDER.map(id => `<tr class="click" data-s="${id}" id="sr-${id}"></tr>`).join('');
+$('#tbl-str').addEventListener('click', e => { const tr = e.target.closest('tr[data-s]'); if (!tr) return; location.hash = '#plant'; setTimeout(() => select('s:' + tr.dataset.s), 80); });
+function renderTrends() {
+  const H = S.hist, n = H.t.length - 1, y = j => H.y[j][n], st = S.st;
+  const band = j => [H.lo.map(r => r[j]), H.hi.map(r => r[j])];
+  chQ.set(H.t, [{ name: 'Q gen', data: H.y[T.Q_gen_kW], color: '--s2' }, { name: 'Q abs', data: H.y[T.Q_abs_kW], color: '--s4' },
+    { name: 'Q cond', data: H.y[T.Q_cond_kW], color: '--s3' }, { name: 'Q evap', data: H.y[T.Q_evap_kW], color: '--s1' }]);
+  chT.set(H.t, [{ name: 'T chw out', data: H.y[T.T_chw_out_C], color: '--s1', band: band(T.T_chw_out_C) },
+    { name: 'T evap', data: H.y[T.T_evap_C], color: '--s3', band: band(T.T_evap_C) }], { refs: [{ v: 0, label: '0 °C', color: '--bad' }] });
+  chC.set(H.t, [{ name: 'COP', data: H.cop, color: '--s1' }]);
+  chX.set(H.t, [{ name: 'x strong', data: H.y[T.x_strong_wt], color: '--s2', band: band(T.x_strong_wt) },
+    { name: 'x weak', data: H.y[T.x_weak_wt], color: '--s1', band: band(T.x_weak_wt) }], { refs: [{ v: X_CRYST, label: '64 wt%', color: '--bad' }] });
+  D.targets.forEach((nm, j) => { const u = NAMES[nm][1]; setText('o-' + nm, fmt(y(j), DEC[u])); setText('s-' + nm, fmt((H.hi[n][j] - H.lo[n][j]) / 2, DEC[u] + 1)); });
+  STR_ORDER.forEach(id => { const s = st.S[id], k = KIND[s.kind], e = s.est ? '≈ ' : '';
+    $('#sr-' + id).innerHTML = `<td><i class="sq" style="--c:var(${k[0]})"></i> <span class="num">${id}</span></td><td>${s.from}</td><td>${s.to}</td><td>${k[1]}</td>` +
+      (id === 'QSHX' ? `<td class="n">–</td><td class="n">–</td><td class="n">–</td><td class="n">–</td><td>${s.ph}</td>` :
+      `<td class="n">${e}${s.T.toFixed(2)}</td><td class="n">${s.P.toFixed(3)}</td><td class="n">${s.x ? s.x.toFixed(2) : '0'}</td><td class="n">${s.m.toFixed(1)}</td><td>${s.ph}</td>`); });
+  const qin = y(T.Q_gen_kW) + y(T.Q_evap_kW), qout = y(T.Q_cond_kW) + y(T.Q_abs_kW), gap = qin - qout;
+  $('#tbl-energy tbody').innerHTML = `<tr><td>In: Q<sub>gen</sub> + Q<sub>evap</sub></td><td class="n">${qin.toFixed(1)} kW</td></tr>
+    <tr><td>Out: Q<sub>cond</sub> + Q<sub>abs</sub></td><td class="n">${qout.toFixed(1)} kW</td></tr>
+    <tr><td>Difference</td><td class="n">${gap >= 0 ? '+' : ''}${gap.toFixed(1)} kW (${(100 * gap / qin).toFixed(2)} %)</td></tr>`;
+  $('#tbl-water tbody').innerHTML = `<tr><td>Hot water, generator</td><td class="n">${S.u[0].toFixed(2)}</td><td class="n">${y(T.T_hw_out_C).toFixed(2)}</td><td class="n">${S.u[1].toFixed(3)}</td></tr>
+    <tr><td>Cooling water, absorber → condenser</td><td class="n">${S.u[2].toFixed(2)}</td><td class="n">${y(T.T_cw_out_C).toFixed(2)}</td><td class="n">${S.u[3].toFixed(3)}</td></tr>
+    <tr><td>Chilled water, evaporator</td><td class="n">${S.u[4].toFixed(2)}</td><td class="n">${y(T.T_chw_out_C).toFixed(2)}</td><td class="n">${S.u[5].toFixed(3)}</td></tr>`;
+}
+
+/* ================================================================ main render */
+let infoTick = 0, infMs = 0;
+function render() {
+  const H = S.hist, st = S.st; if (!st) return;
+  SL.forEach(s => { if (document.activeElement !== s.inp) s.inp.value = S.u[s.k]; if (document.activeElement !== s.nb) s.nb.value = S.u[s.k].toFixed(s.dec); });
+  setText('sb-time', 't ' + hhmm(S.t)); setText('sb-case', 'case: ' + S.scn.name); setText('sb-inf', `inference ${infMs.toFixed(1)} ms/step`);
+  const qe = st.y[T.Q_evap_kW], cop = H.cop[H.cop.length - 1], xm = X_CRYST - st.xs, fm = st.Te - T_FREEZE;
+  const a = H.y[T.Q_evap_kW], d = a[a.length - 1] - a[Math.max(0, a.length - 6)], trend = Math.abs(d) < 0.3 ? 'steady' : d > 0 ? 'rising' : 'falling';
+  $('#sl-text').innerHTML = `Cooling <b>${qe.toFixed(1)} kW</b> (${(qe / 3.517).toFixed(1)} TR, ${trend}) · supply water <b>${st.y[T.T_chw_out_C].toFixed(2)} °C</b> · heat in <b>${st.y[T.Q_gen_kW].toFixed(0)} kW</b> from ${S.u[0].toFixed(1)} °C water · COP <b>${cop.toFixed(3)}</b>`;
+  const al = (id, cls, txt) => { const e = $(id); e.className = 'al ' + cls; if (e.textContent !== txt) e.textContent = txt; };
+  al('#al-cryst', xm > 2 ? '' : xm > 0.8 ? 'warn' : 'bad', `CRYST ${xm > 2 ? 'OK' : xm > 0.8 ? 'LOW MARGIN' : 'ALARM'} ${xm.toFixed(1)} wt%`);
+  al('#al-freeze', fm > 1 ? '' : fm > 0.3 ? 'warn' : 'bad', `FREEZE ${fm > 1 ? 'OK' : fm > 0.3 ? 'LOW MARGIN' : 'ALARM'} ${fm.toFixed(1)} K`);
+  if (!$('#view-plant').hidden) {
+    RO.forEach(r => { const v = r.v(st, H), el = $('#ro-' + r.id), lim = r.lim ? r.lim(v) : '';
+      el.className = 'ro ' + lim; el.querySelector('b').textContent = fmt(v, r.dec);
+      el.querySelector('.s').textContent = r.s.length > 1 ? r.s(v, st) : r.s(r.id === 'qg' ? st : v);
+      el.querySelector('.flag').textContent = lim === 'warn' ? ' LOW' : lim === 'bad' ? ' ALARM' : ''; });
+    setText('u-hw', `${S.u[0].toFixed(1)} → ${st.y[T.T_hw_out_C].toFixed(1)} °C`); setText('u-cw', `${S.u[2].toFixed(1)} → ${st.y[T.T_cw_out_C].toFixed(1)} °C`);
+    setText('u-chw', `${S.u[4].toFixed(1)} → ${st.y[T.T_chw_out_C].toFixed(2)} °C`);
+    if (P) P.update(st);
+    if (!propsHover && ++infoTick % 2 === 0) renderInfo();
+  }
+  if (!$('#view-trends').hidden) renderTrends();
+}
+let lastT = performance.now();
+function tick(now) {
+  const dt = Math.min(0.25, (now - lastT) / 1000); lastT = now;
+  const live = !$('#view-plant').hidden || !$('#view-trends').hidden;
+  if (S.running && !document.hidden && live) {
+    S.acc += dt * S.speed; let k = 0;
+    while (S.acc >= 1 && k < 6) { const t0 = performance.now(); stepOnce(); infMs = 0.8 * infMs + 0.2 * (performance.now() - t0); S.acc -= 1; k++; }
+    if (S.acc > 6) S.acc = 0;
+    if (k) render();
+  }
+  requestAnimationFrame(tick);
+}
+
+/* ================================================================ validation */
+function initValidation() {
+  const comp = D.comparison, best = comp.reduce((a, b) => a.mean_R2 > b.mean_R2 ? a : b);
+  const nm = { 'Static GBM (no memory)': 'Gradient boosting, current inputs only', 'Lag-feature GBM': 'Gradient boosting, lagged + filtered inputs', 'LSTM (single)': 'LSTM, one seed', 'LSTM ensemble (3)': 'LSTM, mean of three seeds (used here)' };
+  $('#tbl-cmp tbody').innerHTML = comp.map(c => `<tr class="${c === best ? 'best' : ''}"><td>${nm[c.model] || c.model}</td><td class="n">${c.mean_R2.toFixed(4)}</td><td class="n">${c.min_R2.toFixed(3)}</td><td class="n">${c.mean_NRMSE_pct.toFixed(2)}</td></tr>`).join('');
+  $('#tbl-met tbody').innerHTML = D.metrics.map(r => { const u = NAMES[r.output][1], d = DEC[u] + 1;
+    return `<tr><td>${NAMES[r.output][0]}</td><td>${u}</td><td class="n">${r.R2.toFixed(5)}</td><td class="n">${fmt(r.RMSE, d)}</td><td class="n">${fmt(r.MAE, d)}</td><td class="n">${r.NRMSE_pct.toFixed(3)}</td></tr>`; }).join('');
+  const TYPE = { daily: '12 h daily profile', aprbs: 'random multi-input steps', step: 'single step change', ramp: 'ramp', startup: 'warm start' };
+  D.test_runs.forEach((r, i) => $('#rp-run').add(new Option(`Run ${r.id} — ${TYPE[r.type]}, ${(r.t[r.t.length - 1] / 60).toFixed(0)} h`, i)));
+  [...D.targets, 'COP_avg30'].forEach((n, j) => $('#rp-out').add(new Option(`${NAMES[n][0]} [${NAMES[n][1]}]`, j)));
+  const rp = new LineChart($('#ch-rp'), { height: 270 }), rpi = new LineChart($('#ch-rp-in'), { height: 160, unit: '°C', dec: 1 });
+  const cache = {};
+  function simulate(i) {
+    if (cache[i]) return cache[i]; const run = D.test_runs[i], tw = new TwinEngine.Twin(D); tw.reset(run.U[0]);
+    const Pp = [], LO = [], HI = []; run.U.forEach(u => { const r = tw.step(u); Pp.push(Array.from(r.mean)); LO.push(r.lo); HI.push(r.hi); });
+    const qe = Pp.map(p => p[T.Q_evap_kW]), qg = Pp.map(p => p[T.Q_gen_kW]);
+    Pp.forEach((p, k) => { let se = 0, sg = 0; for (let q = Math.max(0, k - COPW + 1); q <= k; q++) { se += qe[q]; sg += qg[q]; } p.push(se / sg); });
+    return cache[i] = { P: Pp, LO, HI };
+  }
+  function show() {
+    const i = +$('#rp-run').value, j = +$('#rp-out').value, run = D.test_runs[i], { P: Pp, LO, HI } = simulate(i);
+    const name = [...D.targets, 'COP_avg30'][j], u = NAMES[name][1], d = DEC[u], x = run.t, truth = run.Y.map(r => r[j]), pred = Pp.map(r => r[j]);
+    rp.o.unit = u === '–' ? '' : u; rp.o.dec = d;
+    rp.set(x, [{ name: 'MATLAB model', data: truth, color: '--ink', width: 2.2, dec: d },
+      { name: 'LSTM', data: pred, color: '--s1', dash: [6, 4], width: 1.8, dec: d, band: j < D.targets.length ? [LO.map(r => r[j]), HI.map(r => r[j])] : null }]);
+    rpi.set(x, [{ name: 'hot water in', data: run.U.map(r => r[0]), color: '--hot' }, { name: 'cooling water in', data: run.U.map(r => r[2]), color: '--cool' },
+      { name: 'chilled water return', data: run.U.map(r => r[4]), color: '--chill' }]);
+    let se = 0, sst = 0, mx = 0; const mu = truth.reduce((a, b) => a + b, 0) / truth.length;
+    truth.forEach((v, k) => { const e = pred[k] - v; se += e * e; sst += (v - mu) ** 2; mx = Math.max(mx, Math.abs(e)); });
+    $('#rp-stats').innerHTML = `<span>RMSE ${fmt(Math.sqrt(se / truth.length), d + 1)} ${u}</span><span>max |error| ${fmt(mx, d + 1)} ${u}</span>` +
+      (sst > 1e-12 ? `<span>R² ${(1 - se / sst).toFixed(4)}</span>` : '') + `<span>n = ${truth.length}</span>`;
+    setText('rp-cap', `${NAMES[name][0]}${u === '–' ? '' : ', ' + u}, run ${run.id} (${TYPE[run.type]}).`);
+  }
+  $('#rp-run').addEventListener('change', show); $('#rp-out').addEventListener('change', show);
+  return show;
+}
+let showReplay = null;
+
+/* ================================================================ notes */
+function initNotes() {
+  const best = D.comparison.reduce((a, b) => a.mean_R2 > b.mean_R2 ? a : b);
+  setText('d-r2', `Mean R² on the held-out runs: ${best.mean_R2.toFixed(4)}.`);
+  const steps = [['PUMP', 'The pump lifts weak solution from the absorber pressure (≈0.7 kPa) to the generator pressure (≈8 kPa).'],
+    ['COLD', 'It is preheated in the solution heat exchanger by strong solution returning from the generator.'],
+    ['DESAT', 'Hot water boils part of the water out of the solution. This is the heat that drives the machine.'],
+    ['CONDENS', 'The vapour condenses on tubes carrying cooling water.'],
+    ['VALVE', 'The condensate drops to the low pressure; some flashes and the rest cools to about 2 °C.'],
+    ['EVAP', 'It boils on the chilled-water tubes and takes heat from the building water. This is the cooling effect.'],
+    ['ABSORB', 'Strong solution absorbs the vapour, which keeps the evaporator at low pressure. Cooling water removes the heat of absorption, and the weak solution returns to the pump.']];
+  $('#cycle').innerHTML = steps.map(([k, t]) => `<li>${t} <button type="button" class="inl" data-k="${k}">Show ${k}</button></li>`).join('');
+  $('#cycle').addEventListener('click', e => { const b = e.target.closest('[data-k]'); if (!b) return; location.hash = '#plant'; setTimeout(() => select(b.dataset.k), 80); });
+  const rows = [['Architecture', `LSTM, ${D.layers} layers × ${D.hidden} units; Linear–tanh–Linear output head`], ['Ensemble', `${D.weights.length} networks, different seeds, averaged`],
+    ['Parameters', twin.nParams.toLocaleString('en-US') + ' per network'], ['Inputs', '7: water inlet temperatures and flows, solution pump flow'],
+    ['Outputs', '16 temperatures, duties, concentrations, pressures and flows; COP derived'], ['Time step', `${D.dt} s, simulation mode (no measured outputs fed back)`],
+    ['Initial state', `${D.warmup} warm-up steps at the starting inputs`], ['Data', `${D.n_runs.train} training, ${D.n_runs.validation} validation, ${D.n_runs.test} test runs`],
+    ['Training', 'full-sequence BPTT, AdamW, cosine learning rate, 600 epochs, best validation checkpoint'], ['Loss', 'mean squared error on standardised outputs']];
+  $('#tbl-card').innerHTML = rows.map(([a, b]) => `<tr><td>${a}</td><td style="white-space:normal">${b}</td></tr>`).join('');
+  $('#tbl-env tbody').innerHTML = D.inputs.map((n, k) => { const [l, u] = NAMES[n], dd = u === '°C' ? 1 : 2;
+    return `<tr><td>${l}, ${u}</td><td class="n">${RNG[k][0].toFixed(dd)}</td><td class="n">${U0[k].toFixed(dd)}</td><td class="n">${RNG[k][1].toFixed(dd)}</td></tr>`; }).join('');
+}
+
+/* ================================================================ routing, theme, boot */
+const VIEWS = ['plant', 'trends', 'validation', 'notes'];
+function route() {
+  const v = (location.hash || '#plant').slice(1), view = VIEWS.includes(v) ? v : 'plant';
+  document.querySelectorAll('section.view').forEach(s => s.hidden = s.id !== 'view-' + view);
+  document.querySelectorAll('nav.menu a').forEach(a => a.dataset.view === view ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current'));
+  if (view === 'validation') { if (!showReplay) showReplay = initValidation(); requestAnimationFrame(showReplay); }
+  render();
+}
+window.addEventListener('hashchange', route);
+const retheme = () => { if (P) P.applyTheme(); render(); if (showReplay && !$('#view-validation').hidden) showReplay(); };
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', retheme);
+new MutationObserver(retheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+
+restart(); buildTree();
+try { P = init3D(); } catch (e) { console.error(e); P = null; $('#vp').insertAdjacentHTML('beforeend', '<div class="nogl"><p>The 3D view could not start in this browser. The values in the panels still update.</p></div>'); }
+$('#v-home').addEventListener('click', () => { if (P) P.home(); });
+$('#v-top').addEventListener('click', () => { if (P) P.top(); });
+$('#v-tour').addEventListener('click', startTour);
+$('#v-vals').addEventListener('click', e => { const on = e.currentTarget.getAttribute('aria-pressed') !== 'true'; e.currentTarget.setAttribute('aria-pressed', on); $('#vp').classList.toggle('hide-vals', !on); });
+initNotes(); updRun(); route(); renderInfo(); requestAnimationFrame(tick);
+</script>
