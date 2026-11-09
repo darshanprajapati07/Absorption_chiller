@@ -28,3 +28,4 @@ desktop.ini
 
 # Local tool configuration (Claude Code preview server)
 .claude/
+.vercel/

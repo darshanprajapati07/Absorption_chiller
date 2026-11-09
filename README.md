@@ -4,6 +4,8 @@ A complete, reproducible pipeline that turns an **Aspen Plus** steady-state mode
 
 7th-semester project, Department of Chemical Engineering, IIT Jodhpur, 2026.
 
+**Live demo: [libr-chiller-twin.vercel.app](https://libr-chiller-twin.vercel.app)** — the digital twin, hosted on Vercel. The AI model runs in your browser.
+
 ![3D plant screen of the digital twin](docs/images/dashboard_plant_light.jpg)
 
 ---

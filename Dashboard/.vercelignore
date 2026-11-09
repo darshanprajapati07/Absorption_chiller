@@ -1,0 +1,4 @@
+# Only the built dashboard is served; everything else stays out of the deployment
+*
+!chiller_dashboard.html
+!vercel.json

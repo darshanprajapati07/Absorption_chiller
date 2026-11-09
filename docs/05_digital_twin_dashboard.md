@@ -130,4 +130,20 @@ python make_template_v3.py     # only after editing ui_v3_shell.html
 python build_dashboard.py      # -> chiller_dashboard.html, artifact_page.html, dashboard_data.json
 ```
 
+### Hosting on Vercel
+
+The dashboard is live at **https://libr-chiller-twin.vercel.app**. It is the Vercel project `libr-chiller-twin` in the team `malav-parekhs-projects`.
+
+| File | Role |
+|---|---|
+| `Dashboard/vercel.json` | Serves `chiller_dashboard.html` at `/`, with clean URLs and no caching |
+| `Dashboard/.vercelignore` | Uploads only `chiller_dashboard.html` and `vercel.json`. Build scripts, templates and data stay out of the deployment |
+
+To redeploy after rebuilding the page:
+
+```bash
+cd Dashboard
+npx vercel@latest deploy --prod --scope malav-parekhs-projects --name libr-chiller-twin
+```
+
 The page is about 4 MB, because it contains the weights and test runs. The AI and the numbers work offline. The 3D view and the web fonts need internet the first time.
