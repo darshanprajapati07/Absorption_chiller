@@ -1,0 +1,8 @@
+# Versions used to train the published model (Python 3.12.10, Windows 11, CPU only)
+numpy==2.5.1
+pandas==3.0.3
+scikit-learn==1.9.0
+torch==2.13.0
+matplotlib==3.11.1
+# optional: ONNX export (skipped when not installed)
+# onnx

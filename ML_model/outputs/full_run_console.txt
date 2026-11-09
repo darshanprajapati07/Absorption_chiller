@@ -1,0 +1,114 @@
+Data: 197 runs at 60 s  (train 134, validation 29, test 34)
+
+[1/3] Baselines
+    static GBM done
+    lag-feature GBM done
+
+[2/3] LSTM digital twin: 2 x 128 units, 600 epochs, ensemble of 3 seeds
+    lstm epoch   25  train MSE 0.03574  val MSE 0.03344  (best 0.03344)
+    lstm epoch   50  train MSE 0.01265  val MSE 0.01492  (best 0.01492)
+    lstm epoch   75  train MSE 0.00659  val MSE 0.00643  (best 0.00643)
+    lstm epoch  100  train MSE 0.00437  val MSE 0.00439  (best 0.00439)
+    lstm epoch  125  train MSE 0.00259  val MSE 0.00290  (best 0.00290)
+    lstm epoch  150  train MSE 0.00239  val MSE 0.00309  (best 0.00238)
+    lstm epoch  175  train MSE 0.00201  val MSE 0.00216  (best 0.00198)
+    lstm epoch  200  train MSE 0.00163  val MSE 0.00182  (best 0.00182)
+    lstm epoch  225  train MSE 0.00124  val MSE 0.00148  (best 0.00147)
+    lstm epoch  250  train MSE 0.00113  val MSE 0.00129  (best 0.00129)
+    lstm epoch  275  train MSE 0.00111  val MSE 0.00139  (best 0.00126)
+    lstm epoch  300  train MSE 0.00098  val MSE 0.00114  (best 0.00114)
+    lstm epoch  325  train MSE 0.00094  val MSE 0.00111  (best 0.00110)
+    lstm epoch  350  train MSE 0.00094  val MSE 0.00108  (best 0.00107)
+    lstm epoch  375  train MSE 0.00089  val MSE 0.00103  (best 0.00103)
+    lstm epoch  400  train MSE 0.00087  val MSE 0.00101  (best 0.00101)
+    lstm epoch  425  train MSE 0.00085  val MSE 0.00100  (best 0.00099)
+    lstm epoch  450  train MSE 0.00084  val MSE 0.00097  (best 0.00097)
+    lstm epoch  475  train MSE 0.00083  val MSE 0.00097  (best 0.00097)
+    lstm epoch  500  train MSE 0.00082  val MSE 0.00096  (best 0.00096)
+    lstm epoch  525  train MSE 0.00082  val MSE 0.00096  (best 0.00096)
+    lstm epoch  550  train MSE 0.00081  val MSE 0.00095  (best 0.00095)
+    lstm epoch  575  train MSE 0.00081  val MSE 0.00095  (best 0.00095)
+    lstm epoch  600  train MSE 0.00081  val MSE 0.00095  (best 0.00095)
+    seed 0 best validation MSE 0.00095  (29.4 min)
+    lstm epoch   25  train MSE 0.02922  val MSE 0.03030  (best 0.03030)
+    lstm epoch   50  train MSE 0.01001  val MSE 0.00903  (best 0.00903)
+    lstm epoch   75  train MSE 0.00466  val MSE 0.00479  (best 0.00479)
+    lstm epoch  100  train MSE 0.00382  val MSE 0.00364  (best 0.00364)
+    lstm epoch  125  train MSE 0.00428  val MSE 0.00354  (best 0.00276)
+    lstm epoch  150  train MSE 0.00156  val MSE 0.00184  (best 0.00184)
+    lstm epoch  175  train MSE 0.00158  val MSE 0.00180  (best 0.00180)
+    lstm epoch  200  train MSE 0.00123  val MSE 0.00152  (best 0.00152)
+    lstm epoch  225  train MSE 0.00116  val MSE 0.00135  (best 0.00135)
+    lstm epoch  250  train MSE 0.00117  val MSE 0.00140  (best 0.00121)
+    lstm epoch  275  train MSE 0.00140  val MSE 0.00151  (best 0.00121)
+    lstm epoch  300  train MSE 0.00096  val MSE 0.00113  (best 0.00110)
+    lstm epoch  325  train MSE 0.00091  val MSE 0.00104  (best 0.00104)
+    lstm epoch  350  train MSE 0.00088  val MSE 0.00102  (best 0.00101)
+    lstm epoch  375  train MSE 0.00085  val MSE 0.00100  (best 0.00100)
+    lstm epoch  400  train MSE 0.00084  val MSE 0.00098  (best 0.00098)
+    lstm epoch  425  train MSE 0.00082  val MSE 0.00096  (best 0.00096)
+    lstm epoch  450  train MSE 0.00081  val MSE 0.00095  (best 0.00095)
+    lstm epoch  475  train MSE 0.00081  val MSE 0.00094  (best 0.00094)
+    lstm epoch  500  train MSE 0.00080  val MSE 0.00093  (best 0.00093)
+    lstm epoch  525  train MSE 0.00080  val MSE 0.00093  (best 0.00093)
+    lstm epoch  550  train MSE 0.00079  val MSE 0.00093  (best 0.00093)
+    lstm epoch  575  train MSE 0.00079  val MSE 0.00093  (best 0.00093)
+    lstm epoch  600  train MSE 0.00079  val MSE 0.00092  (best 0.00092)
+    seed 1 best validation MSE 0.00092  (94.9 min)
+    lstm epoch   25  train MSE 0.03490  val MSE 0.03437  (best 0.03416)
+    lstm epoch   50  train MSE 0.00987  val MSE 0.00968  (best 0.00968)
+    lstm epoch   75  train MSE 0.00616  val MSE 0.00679  (best 0.00578)
+    lstm epoch  100  train MSE 0.00391  val MSE 0.00418  (best 0.00418)
+    lstm epoch  125  train MSE 0.00209  val MSE 0.00252  (best 0.00251)
+    lstm epoch  150  train MSE 0.00570  val MSE 0.00436  (best 0.00251)
+    lstm epoch  175  train MSE 0.00150  val MSE 0.00169  (best 0.00169)
+    lstm epoch  200  train MSE 0.00131  val MSE 0.00213  (best 0.00149)
+    lstm epoch  225  train MSE 0.00120  val MSE 0.00160  (best 0.00139)
+    lstm epoch  250  train MSE 0.00105  val MSE 0.00124  (best 0.00124)
+    lstm epoch  275  train MSE 0.00098  val MSE 0.00116  (best 0.00116)
+    lstm epoch  300  train MSE 0.00103  val MSE 0.00115  (best 0.00114)
+    lstm epoch  325  train MSE 0.00090  val MSE 0.00109  (best 0.00107)
+    lstm epoch  350  train MSE 0.00090  val MSE 0.00103  (best 0.00103)
+    lstm epoch  375  train MSE 0.00085  val MSE 0.00100  (best 0.00100)
+    lstm epoch  400  train MSE 0.00083  val MSE 0.00098  (best 0.00098)
+    lstm epoch  425  train MSE 0.00082  val MSE 0.00097  (best 0.00097)
+    lstm epoch  450  train MSE 0.00082  val MSE 0.00098  (best 0.00096)
+    lstm epoch  475  train MSE 0.00080  val MSE 0.00095  (best 0.00095)
+    lstm epoch  500  train MSE 0.00080  val MSE 0.00095  (best 0.00095)
+    lstm epoch  525  train MSE 0.00079  val MSE 0.00094  (best 0.00094)
+    lstm epoch  550  train MSE 0.00079  val MSE 0.00094  (best 0.00094)
+    lstm epoch  575  train MSE 0.00079  val MSE 0.00094  (best 0.00094)
+    lstm epoch  600  train MSE 0.00079  val MSE 0.00094  (best 0.00094)
+    seed 2 best validation MSE 0.00094  (141.2 min)
+
+[3/3] Test-set evaluation (34 unseen runs incl. 5 daily profiles)
+  Static GBM (no memory)     mean R2 0.74488   mean NRMSE 6.087 %
+  Lag-feature GBM            mean R2 0.97854   mean NRMSE 2.072 %
+  LSTM (single)              mean R2 0.99910   mean NRMSE 0.392 %
+  LSTM ensemble (3)          mean R2 0.99914   mean NRMSE 0.382 %
+
+  BEST MODEL: LSTM ensemble (3)
+  Output              unit        R2      RMSE       MAE   NRMSE%    MAPE%
+  Q_evap_kW             kW   0.99899    0.3109    0.1254    0.430    0.173
+  T_chw_out_C            C   0.99962    0.0235    0.0105    0.373    0.120
+  Q_gen_kW              kW   0.99845    0.7666    0.2955    0.327    0.408
+  Q_cond_kW             kW   0.99910    0.3455    0.1300    0.475    0.170
+  Q_abs_kW              kW   0.99543    1.0055    0.3043    0.478    0.447
+  T_hw_out_C             C   0.99977    0.0768    0.0350    0.249    0.038
+  T_cw_out_C             C   0.99968    0.0303    0.0123    0.356    0.036
+  T_gen_C                C   0.99961    0.0869    0.0346    0.320    0.040
+  T_cond_C               C   0.99925    0.0634    0.0236    0.484    0.052
+  T_evap_C               C   0.99930    0.0388    0.0151    0.478      nan
+  T_abs_C                C   0.99909    0.0487    0.0166    0.593    0.049
+  x_strong_wt          wt%   0.99985    0.0121    0.0074    0.180    0.013
+  x_weak_wt            wt%   0.99986    0.0096    0.0061    0.182    0.011
+  P_high_kPa           kPa   0.99924    0.0326    0.0122    0.502    0.122
+  P_low_kPa            kPa   0.99925    0.0023    0.0009    0.483    0.110
+  m_ref_gen_kg_s      kg/s   0.99970    0.0001    0.0000    0.268      nan
+  COP_avg30              -   0.99921    0.0014    0.0009    0.314      nan
+  Daily-profile runs only (12 h, never seen in training): mean R2 0.99993, Q_evap RMSE 0.040 kW, T_chw_out RMSE 0.0035 C
+C:\Users\MALAV PAREKH\AppData\Local\Programs\Python\Python312\Lib\site-packages\torch\onnx\_internal\torchscript_exporter\symbolic_opset9.py:4462: UserWarning: Exporting a model to ONNX with a batch_size other than 1, with a variable length with LSTM can cause an error when running the ONNX model with a different batch size. Make sure to save the model with a batch size of 1, or define the initial states (h0/c0) as inputs of the model. 
+  return _generic_rnn(
+    (ONNX export skipped: Module onnx is not installed!)
+
+Done in 141.7 min. Results in C:\Users\MALAV PAREKH\Downloads\darshan ai project\ML_model\outputs
