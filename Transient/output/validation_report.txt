@@ -1,0 +1,60 @@
+VALIDATION REPORT - single-effect H2O-LiBr absorption chiller dynamic model
+Generated 05-Nov-2026 12:24:13 (full mode)
+
+A. STEADY STATE AT DESIGN INPUTS vs ASPEN PLUS BASE CASE
+   (max scaled dx/dt at steady state = 1.89e-14)
+   Quantity                            Aspen        Model       Diff
+   Generator T [C]                    89.893       89.893    -0.000
+   Condenser T [C]                    46.140       46.140    +0.000
+   Evaporator T [C]                    1.743        1.743    -0.000
+   Absorber T [C]                     33.304       33.304    +0.000
+   Strong solution x [wt%]            59.488       59.488    -0.000
+   Weak solution x [wt%]              57.400       57.400    +0.000
+   Refrigerant flow [kg/h]           126.354      126.355    +0.001
+   SHX strong out T5 [C]              53.300       53.300    +0.000
+   SHX weak out T3 [C]                67.943       67.588    -0.355
+   Q_gen [kW]                        133.342      137.731    +3.29 %
+   Q_evap [kW]                        81.119       81.116    -0.00 %
+   Q_cond [kW]                        86.149       86.569    +0.49 %
+   Q_abs [kW]                        128.126      132.278    +3.24 %
+   Q_shx [kW]                         68.030       68.669    +0.94 %
+   COP [-]                             0.608        0.589    -3.19 %
+   Model energy residual Q_gen+Q_evap-Q_cond-Q_abs = -2.84e-14 kW
+   Note: states match Aspen exactly (calibrated). Duties differ by up to ~3.5 %
+   because the dynamic model uses ASHRAE LiBr-H2O enthalpies, whereas Aspen uses
+   ELECNRTL (different heat of mixing). Q_evap (pure water) matches exactly.
+
+B. THERMODYNAMIC CORE vs 163 VALID ASPEN SENS-1 CASES
+   (same T_gen, T_cond, T_evap, x_weak = 57.4 wt%, pump 1 kg/s, T5 = 53.3 C)
+   Quantity            mean bias   mean |err|    max |err|   mean |err| %
+   x_strong [wt%]         -0.020        0.034        0.093          0.06%
+   m_ref [kg/h]           -1.079        1.842        5.020          1.21%
+   T_abs_out [C]          -0.066        0.066        0.128          0.17%
+   Q_gen [kW]              7.305        7.305       14.963          3.44%
+   Q_evap [kW]            -0.708        1.196        3.273          1.21%
+   COP [-]                -0.025        0.026        0.032          3.78%
+   COP correlation model vs Aspen: R = 0.9998
+
+C. STEP RESPONSE: HOT WATER INLET +10 K AT t = 0
+   Output              initial      final  t63 [min]  t95 [min]
+   Q_evap [kW]          81.116     93.568       18.2       46.5
+   T_chw_out [C]         7.000      6.232       18.2       46.5
+   x_strong [wt%]       59.488     61.319       12.7       41.0
+   Q_gen [kW]          137.731    157.662   (peak 228.9 kW just after the step, then decays)
+   COP [-]               0.589      0.593
+
+D. TRANSIENT DATASET
+   Runs simulated: 199   valid: 197   excluded: 2
+   aprbs     runs 150  valid 149
+   daily     runs   5  valid   5
+   ramp      runs  16  valid  16
+   shutdown  runs   4  valid   4
+   startup   runs   4  valid   4
+   step      runs  20  valid  19
+   Rows in transient_dataset.csv: 291437  (sample time 10 s)
+   Split (runs): train 134, validation 29, test 34
+   Energy conservation error per run: max 0.0320 %, mean 0.0011 % (limit 1.0 %)
+   Valid data ranges: COP_avg30 0.364-1.082, Q_evap 29.6-115.0 kW, x_strong 54.64-61.54 wt%, T_evap 0.07-8.59 C
+   excluded because "T_evap < 0 C (freezing risk)": 2 runs
+
+Total run time: 4.8 min

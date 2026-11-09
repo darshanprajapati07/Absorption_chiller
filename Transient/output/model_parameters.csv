@@ -1,0 +1,27 @@
+parameter,value,unit,source
+UA_gen,12.9824429969694,kW/K,calibrated
+UA_cond,5.98487871444633,kW/K,calibrated
+UA_evap,10.8429470894575,kW/K,calibrated
+UA_abs,30.6180764827043,kW/K,calibrated
+UA_shx,3.25035888359307,kW/K,calibrated (Aspen T5)
+k_vap_gen,0.000345041682008701,kg/s/Pa,calibrated
+k_vap_abs,0.00523165332882676,kg/s/Pa,calibrated
+dT_eq_gen,-1.24415522797585,K,Aspen vs ASHRAE equilibrium
+dT_eq_abs,-2.09171224137114,K,Aspen vs ASHRAE equilibrium
+dT_dyn_gen,-1.47138910954398,K,incl. vapour driving dP
+dT_dyn_abs,-1.93028590342304,K,incl. vapour driving dP
+m_strong_nominal,0.964901666666667,kg/s,Aspen base
+Mc_gen,800,kJ/K,assumed
+Mc_cond,400,kJ/K,assumed
+Mc_evap,600,kJ/K,assumed
+Mc_abs,800,kJ/K,assumed
+M_sol_gen0,120,kg,assumed
+M_sol_abs0,200,kg,assumed
+M_ref_evap0,30,kg,assumed
+T_hw_in_nom,105,C,design choice
+m_hw_nom,4.11283162728608,kg/s,design (8 K drop)
+T_cw_in_nom,27,C,design choice
+m_cw_nom,9.02859155990116,kg/s,design (3.5 K rise in absorber)
+T_chw_in_nom,12,C,design choice
+m_chw_nom,3.87557238163434,kg/s,design (12->7 C)
+m_pump_nom,1,kg/s,Aspen base
