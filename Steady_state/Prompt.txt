@@ -1,0 +1,942 @@
+# MASTER HANDOVER PROMPT — ASPEN PLUS ABSORPTION CHILLER PROJECT
+
+## 1. Your role
+
+Act as a senior Chemical Engineering process simulation expert with strong expertise in:
+
+- Aspen Plus process simulation
+- Water–Lithium Bromide (H₂O–LiBr) absorption refrigeration systems
+- Electrolyte thermodynamics and ELECNRTL
+- Energy and mass balance validation
+- Thermodynamic equilibrium calculations
+- Sensitivity analysis and dataset generation
+- Machine learning datasets for chemical engineering applications
+
+I am continuing an existing project. Do not start from scratch. First understand the existing model, attached files, simulation history and current problems.
+
+I need technically correct, physically meaningful and submission-ready results. Do not simply make Aspen converge or modify Excel formulas to produce attractive COP values.
+
+**Your first responsibility is to audit the existing model and identify the actual causes of the energy-balance and COP problems.**
+
+---
+
+# 2. Project background
+
+**Project title:** AI for Transient Behavior Prediction in Absorption Chillers
+
+**Academic background:** 7th-semester Chemical Engineering student, IIT Jodhpur.
+
+**Project objective:**
+
+Develop an AI/ML-based model to predict the transient behaviour of a single-effect water/LiBr absorption chiller.
+
+The project requires a physically consistent steady-state process model and dataset before moving towards transient modelling.
+
+The intended workflow is:
+
+1. Develop a steady-state absorption chiller model in Aspen Plus.
+2. Validate material balances, component balances and energy balances.
+3. Generate a physically meaningful operating dataset through sensitivity analysis.
+4. Use the steady-state dataset for AI/ML surrogate modelling.
+5. Subsequently develop a dynamic/transient model, potentially in MATLAB.
+6. Use AI to predict transient process behaviour.
+
+At present, my immediate priority is to complete and validate the Aspen Plus steady-state model and prepare its final dataset.
+
+---
+
+# 3. Aspen Plus model details
+
+The existing model represents a single-effect water/LiBr absorption chiller.
+
+### Thermodynamic model
+
+| Parameter | Current setting |
+|---|---|
+| Property method | ELECNRTL |
+| Electrolyte chemistry ID | GLOBAL |
+| True species approach for electrolytes | YES |
+| Free-water phase properties method | STEAM-TA |
+| Water solubility method | 3 |
+| Components | WATER, LIBR, LI+, BR− |
+
+Do not change the property method or electrolyte configuration without first demonstrating why a change is necessary.
+
+The model uses true species for the electrolyte system. The stream reports show WATER, LI+ and BR−. The LIBR component flow is zero in the displayed stream results.
+
+Do not assume the electrolyte representation is correct simply because Aspen converges. Examine the thermodynamic and species representation.
+
+---
+
+# 4. Existing flowsheet — DO NOT REBUILD
+
+The current flowsheet contains these blocks:
+
+1. PUMP
+2. COLD
+3. HOT
+4. DESHEAT1
+5. DESAT
+6. DFLASH
+7. DESHEAT3
+8. CONDENS
+9. VALVE
+10. EVAP
+11. SOL_VALVE
+12. ABSORB
+13. QSHX
+
+### Existing stream connections
+
+| Stream | From | To |
+|---|---|---|
+| 1 | ABSORB cycle break | PUMP |
+| 1A | ABSORB outlet | Intentionally disconnected |
+| 2 | PUMP | COLD |
+| 3 | COLD | DESHEAT1 |
+| 4 | DFLASH liquid outlet | HOT |
+| 5 | HOT | SOL_VALVE |
+| 6 | SOL_VALVE | ABSORB |
+| 7 | DESHEAT3 | CONDENS |
+| 8 | CONDENS | VALVE |
+| 9 | VALVE | EVAP |
+| 10 | EVAP | ABSORB |
+| A | DESHEAT1 | DESAT |
+| B | DESAT | DFLASH |
+| C | DFLASH vapour outlet | DESHEAT3 |
+
+Streams 1 and 1A are intentionally disconnected because of the paper cycle break.
+
+### Important restrictions
+
+My existing flowsheet is already built. Do not:
+
+- Add new blocks.
+- Delete existing blocks.
+- Change stream connections.
+- Replace existing equipment models.
+- Change ELECNRTL.
+- Change the component list.
+- Change mass flow rates without explaining the necessity.
+- Rebuild the process in another simulation software.
+
+First analyse the existing model and suggest the smallest technically justified corrections.
+
+If a fundamental modelling limitation exists, explain it clearly before recommending structural changes.
+
+---
+
+# 5. Latest nominal operating conditions
+
+The latest diagnostic run uses the following operating conditions.
+
+| Parameter | Block | Latest value |
+|---|---|---:|
+| Generator temperature | DESAT | 103.5°C |
+| Condenser temperature | CONDENS | 44°C |
+| Absorber temperature | ABSORB | 35°C |
+| Evaporator temperature | EVAP | 1.8°C |
+| High-side pressure | DESAT / CONDENS | 10,200 Pa |
+| Low-side pressure | ABSORB / EVAP | 697 Pa |
+| Pump discharge pressure | PUMP | 10,200 Pa |
+| SOL_VALVE outlet pressure | SOL_VALVE | 697 Pa |
+
+The absorber temperature was reduced from 40.7°C to 35°C after the earlier simulation showed undesirable vapour generation.
+
+**The latest nominal case is the 35°C absorber case.**
+
+The earlier 40.7°C results must not be mistakenly treated as the latest nominal results.
+
+---
+
+# 6. Latest block configuration and available parameters
+
+## 6.1 PUMP
+
+Equipment: Aspen Pump.
+
+| Parameter | Value |
+|---|---:|
+| Specified discharge pressure | 10,200 Pa |
+| Pump efficiency | 1.0 |
+| Driver efficiency | 1.0 |
+| Fluid power | 0.00599681 kW |
+| Calculated brake power | 0.00599681 kW |
+| Electricity | 0.00599681 kW |
+| Volumetric flow | 2,265.79727 L/h |
+| Pressure increase | 0.09403405 atm |
+| Head developed | 0.61150445 m |
+| NPSH available | 0 m |
+
+The pump is idealized, and its NPSH result needs engineering review.
+
+## 6.2 COLD
+
+Equipment: Aspen Heater.
+
+Previously reported results:
+
+| Parameter | Value |
+|---|---:|
+| Specified pressure | 10,200 Pa |
+| Specified temperature | 63.8°C |
+| Calculated temperature | 67.3431°C |
+| Calculated heat duty | +58,502.8352 kcal/h |
+| Net duty | 0 kcal/h |
+
+Do not assume the calculated heat duty is an external heat input. Its net duty is zero.
+
+## 6.3 HOT
+
+Equipment: Aspen Heater.
+
+Previously reported results:
+
+| Parameter | Value |
+|---|---:|
+| Specified pressure | 10,200 Pa |
+| Specified temperature | 53.3°C |
+| Calculated temperature | 53.3°C |
+| Calculated heat duty | −58,503.9009 kcal/h |
+| Net duty | −58,503.9009 kcal/h |
+
+Investigate the relationship between HOT, COLD and QSHX. Do not double-count internal heat recovery.
+
+## 6.4 DESHEAT1
+
+Equipment: Aspen Heater.
+
+Previously reported results:
+
+| Parameter | Value |
+|---|---:|
+| Pressure | 10,200 Pa |
+| Temperature | 63.8°C |
+| Vapour fraction | 0 |
+| Calculated heat duty | −5,975.26876 kcal/h |
+| Net duty | −5,975.26876 kcal/h |
+
+## 6.5 DESAT
+
+Equipment: Aspen Heater.
+
+Previously reported results:
+
+| Parameter | Value |
+|---|---:|
+| Pressure | 10,200 Pa |
+| Temperature | 103.5°C |
+| Calculated vapour fraction | 0.175277952 |
+| Calculated heat duty | +328,540.135 kcal/h |
+| Net duty | +328,540.135 kcal/h |
+
+## 6.6 DFLASH
+
+Existing separator block.
+
+It separates the DESAT outlet into:
+- Liquid solution: Stream 4
+- Vapour/refrigerant: Stream C
+
+Latest stream results should be taken from the attached stream-results Excel.
+
+## 6.7 DESHEAT3
+
+Equipment: Aspen Heater.
+
+Previously reported results:
+
+| Parameter | Value |
+|---|---:|
+| Pressure | 10,200 Pa |
+| Temperature | 78.4°C |
+| Vapour fraction | 1 |
+| Calculated heat duty | −656.449133 kcal/h |
+| Net duty | −656.449133 kcal/h |
+
+## 6.8 CONDENS
+
+Equipment: Aspen Heater.
+
+Latest nominal specification:
+
+| Parameter | Value |
+|---|---:|
+| Pressure | 10,200 Pa |
+| Temperature | 44°C |
+| Specified vapour fraction | 0 |
+| Calculated vapour fraction | 0 |
+| Calculated heat duty | −74,396.7847 kcal/h |
+| Net duty | −74,396.7847 kcal/h |
+
+The condenser outlet is liquid at 44°C and 10.2 kPa.
+
+Do not increase its temperature blindly. Check the outlet phase at every sensitivity case.
+
+## 6.9 VALVE
+
+Existing throttling valve.
+
+The valve outlet pressure is 697 Pa.
+
+Its calculation type is ADIAB-FLASH.
+
+The valve is intended to operate adiabatically and approximately isenthalpically.
+
+## 6.10 EVAP
+
+Equipment: Aspen Heater.
+
+Latest nominal specification:
+
+| Parameter | Value |
+|---|---:|
+| Pressure | 697 Pa |
+| Temperature | 1.8°C |
+| Calculated vapour fraction | 1 |
+| Calculated heat duty | +70,072.1879 kcal/h |
+| Net duty | +70,072.1879 kcal/h |
+
+The evaporator outlet is vapour.
+
+## 6.11 SOL_VALVE
+
+Existing throttling valve.
+
+Latest specification:
+
+| Parameter | Value |
+|---|---:|
+| Calculation type | ADIAB-FLASH |
+| Outlet pressure | 697 Pa |
+
+Previously reported Stream 5 and Stream 6 enthalpy flows:
+
+\[
+H_5=-7,483,127.9566\ \text{kcal/h}
+\]
+
+\[
+H_6=-7,483,209.1599\ \text{kcal/h}
+\]
+
+Difference:
+
+\[
+\Delta H=-81.2034\ \text{kcal/h}
+\]
+
+This is a very small relative difference, approximately 0.001085%, and is consistent with approximately isenthalpic throttling.
+
+Stream 6 contains a small amount of flashed water vapour.
+
+## 6.12 ABSORB
+
+Equipment: Aspen Heater, NOT a rigorous absorber column.
+
+Latest nominal specification:
+
+| Parameter | Value |
+|---|---:|
+| Pressure | 697 Pa |
+| Temperature | 35°C |
+| Calculated vapour fraction | 0.0255404 molar |
+| Mass vapour fraction | 0.0169625 |
+
+The earlier 40.7°C case had a much higher vapour fraction and positive heat duty.
+
+At 35°C, the absorber result shows net water-vapour absorption and negative heat duty.
+
+Important modelling limitation:
+
+This Heater-based representation calculates an equilibrium outlet state. It does not explicitly model:
+- Packing or tray mass transfer.
+- Interfacial area.
+- Absorption kinetics.
+- Cooling-water flow.
+- Heat and mass transfer coefficients.
+- Detailed absorber geometry.
+
+Do not describe it as a rigorous industrial absorber model.
+
+## 6.13 QSHX
+
+The available QSHX result was:
+
+| Parameter | Value |
+|---|---:|
+| QCALC | 58,502.8352 kcal/h |
+| TBEGIN | 89.9°C |
+| TEND | 53.3°C |
+
+Determine whether QSHX represents internal heat recovery and how it relates to HOT and COLD.
+
+Do not count the same heat transfer multiple times.
+
+---
+
+# 7. Latest stream-results data — 35°C absorber case
+
+The following data come from the latest stream table.
+
+All mass flows are in kg/h, temperatures in °C, and pressures in atm unless otherwise specified.
+
+## 7.1 Temperatures
+
+| Stream | Temperature |
+|---|---:|
+| 1 | 32.705620 |
+| 1A | 35.000000 |
+| 2 | 32.705620 |
+| 3 | 67.343097 |
+| 4 | 89.900000 |
+| 5 | 53.300000 |
+| 6 | 38.163707 |
+| 7 | 78.400000 |
+| 8 | 44.000000 |
+| 9 | 1.742576 |
+| 10 | 1.800000 |
+| A | 63.800000 |
+| B | 103.500000 |
+| C | 89.900000 |
+
+## 7.2 Pressures
+
+| Stream | Pressure (atm) | Approximate pressure (Pa) |
+|---|---:|---:|
+| 1 | 0.006632124 | 672 |
+| 1A | 0.006878855 | 697 |
+| 2 | 0.100666173 | 10,200 |
+| 3 | 0.100666173 | 10,200 |
+| 4 | 0.100666173 | 10,200 |
+| 5 | 0.100666173 | 10,200 |
+| 6 | 0.006878855 | 697 |
+| 7 | 0.100666173 | 10,200 |
+| 8 | 0.100666173 | 10,200 |
+| 9 | 0.006878855 | 697 |
+| 10 | 0.006878855 | 697 |
+| A | 0.100666173 | 10,200 |
+| B | 0.100666173 | 10,200 |
+| C | 0.100666173 | 10,200 |
+
+Stream 1 and Stream 1A have slightly different pressures because they are intentionally disconnected cycle-break streams.
+
+## 7.3 Mass flow rates
+
+| Stream | Mass flow (kg/h) |
+|---|---:|
+| 1 | 3,600.000 |
+| 1A | 3,600.000 |
+| 2 | 3,600.000 |
+| 3 | 3,600.000 |
+| 4 | 3,473.527 |
+| 5 | 3,473.527 |
+| 6 | 3,473.527 |
+| 7 | 126.473 |
+| 8 | 126.473 |
+| 9 | 126.473 |
+| 10 | 126.473 |
+| A | 3,600.000 |
+| B | 3,600.000 |
+| C | 126.473 |
+
+The separator mass balance is:
+
+\[
+3600=3473.527+126.473
+\]
+
+This closes within rounding.
+
+## 7.4 Vapour fractions
+
+Latest mass vapour fractions:
+
+| Stream | Mass vapour fraction |
+|---|---:|
+| 1 | 0 |
+| 1A | 0.01696248 |
+| 2 | 0 |
+| 3 | 0 |
+| 4 | 0 |
+| 5 | 0 |
+| 6 | 0.01094563 |
+| 7 | 1 |
+| 8 | 0 |
+| 9 | 0.07082014 |
+| 10 | 1 |
+| A | 0 |
+| B | 0.11640965 |
+| C | 1 |
+
+The condenser outlet is liquid. The evaporator outlet is vapour.
+
+## 7.5 Enthalpy flows
+
+Latest stream enthalpy flows:
+
+| Stream | Enthalpy flow (kcal/h) |
+|---|---:|
+| 1 | −8,001,436.472 |
+| 1A | −7,958,994.376 |
+| 2 | −8,001,433.905 |
+| 3 | −7,942,931.085 |
+| 4 | −7,424,510.861 |
+| 5 | −7,483,013.993 |
+| 6 | −7,483,095.191 |
+| 7 | −402,755.903 |
+| 8 | −477,170.211 |
+| 9 | −477,170.211 |
+| 10 | −407,081.518 |
+| A | −7,948,906.354 |
+| B | −7,620,366.218 |
+| C | −402,099.299 |
+
+These are the latest stream-table values. Use the attached full stream-results workbook as the source of truth if it contains more precise values.
+
+---
+
+# 8. Latest absorber phase composition — important
+
+The latest Stream 1A phase-wise composition at 35°C is:
+
+| Component | Vapour phase (kg/h) | Liquid phase (kg/h) |
+|---|---:|---:|
+| WATER | 61.064930 | 1,472.535070 |
+| LIBR | 0 | 0 |
+| LI+ | 0 | 165.141872 |
+| BR− | 0 | 1,901.258128 |
+| Total | 61.064930 | 3,538.935070 |
+
+The liquid-phase LiBr mass is:
+
+\[
+m_{\mathrm{LiBr}}=165.141872+1901.258128
+=2066.4\ \mathrm{kg/h}
+\]
+
+Liquid-phase concentration:
+
+\[
+X_{\mathrm{LiBr,1A}}=
+\frac{2066.4}{3538.93507}\times100
+\]
+
+\[
+X_{\mathrm{LiBr,1A}}\approx58.39\ \mathrm{wt\%}
+\]
+
+Stream 6 liquid-phase composition:
+
+| Component | Liquid mass flow (kg/h) |
+|---|---:|
+| WATER | 1,369.134468 |
+| LI+ | 165.141872 |
+| BR− | 1,901.258128 |
+| Total | 3,435.534468 |
+
+Its liquid-phase LiBr concentration is approximately 60.15 wt%.
+
+The absorber therefore dilutes the liquid solution from approximately 60.15 wt% to 58.39 wt%.
+
+Stream 6 vapour phase:
+
+- Water vapour: 38.022704 kg/h.
+
+Stream 10:
+
+- Water vapour: 126.472609 kg/h.
+
+Stream 1A vapour:
+
+- Water vapour: 61.064930 kg/h.
+
+Net vapour absorption:
+
+\[
+(38.022704+126.472609)-61.064930
+\]
+
+\[
+\boxed{103.430383\ \mathrm{kg/h}}
+\]
+
+This is a net phase-balance calculation, not a direct kinetic absorption rate.
+
+---
+
+# 9. Latest absorber energy balance
+
+Use the latest stream enthalpy flows:
+
+\[
+H_{1A}=-7,958,994.375945\ \mathrm{kcal/h}
+\]
+
+\[
+H_6=-7,483,095.191382\ \mathrm{kcal/h}
+\]
+
+\[
+H_{10}=-407,081.518329\ \mathrm{kcal/h}
+\]
+
+For the absorber:
+
+\[
+Q_{\mathrm{ABSORB}}=H_{1A}-H_6-H_{10}
+\]
+
+\[
+\boxed{Q_{\mathrm{ABSORB}}\approx-68,817.666\ \mathrm{kcal/h}}
+\]
+
+This is approximately −80.0 kW.
+
+The negative sign means heat removal under the current Aspen convention.
+
+This is consistent with the expected exothermic absorption behaviour.
+
+---
+
+# 10. Previous energy-balance and COP problems
+
+I previously generated sensitivity datasets and found major problems.
+
+One uploaded workbook contains:
+- 1,297 rows.
+- 1,296 factorial sensitivity cases.
+- One nominal case.
+
+The reported COP range was approximately 0.1937 to 0.2502, with an average around 0.2196.
+
+The earlier spreadsheet used:
+
+\[
+R=Q_{\mathrm{EVAP}}+Q_{\mathrm{DES}}+
+Q_{\mathrm{ABS}}+Q_{\mathrm{COND}}
+\]
+
+For the previous nominal case, the four-duty residual was approximately:
+
+\[
+R=255,402.386\ \mathrm{kcal/h}
+\]
+
+The spreadsheet COP was approximately 0.2133.
+
+These results were not physically validated.
+
+The earlier COP calculation used only DESAT duty and did not properly establish the complete external generator heat input.
+
+Other duties reported in the earlier 40.7°C absorber run:
+
+| Block | Net duty (kcal/h) |
+|---|---:|
+| DESAT | +328,540.135 |
+| DESHEAT1 | −5,975.269 |
+| DESHEAT3 | −656.449 |
+| CONDENS | −74,396.785 |
+| EVAP | +70,072.188 |
+| ABSORB at 40.7°C | +53,644.237 |
+| HOT | −58,503.901 |
+| COLD | 0 net duty |
+| QSHX | 58,502.835 calculated exchange |
+
+These duties mostly belong to the previous 40.7°C absorber case. Do not assume they all remain unchanged in the latest 35°C case.
+
+For the latest 35°C case, the absorber duty derived from stream enthalpy flows is approximately −68,817.666 kcal/h.
+
+---
+
+# 11. Critical task: perform a complete energy-balance audit
+
+This is the most important task.
+
+Do not simply add all block duties together.
+
+First establish a clearly defined control volume around the complete absorption chiller.
+
+Determine which terms are:
+- External heat inputs.
+- External heat rejections.
+- Internal heat recovery.
+- Pump work.
+- Process-stream enthalpy changes.
+- Repeated or double-counted duties.
+
+For the complete cycle, internal heat exchange should cancel when the boundary includes both sides of the exchanger.
+
+Investigate the relationship between:
+- COLD
+- HOT
+- QSHX
+- DESHEAT1
+- DESHEAT3
+- DESAT
+
+Do not assume that all these block duties are independent external contributions.
+
+Also check whether the cycle-break streams 1 and 1A introduce an artificial imbalance.
+
+Use stream enthalpy flows and block duties to reconcile the calculations.
+
+Show every equation, sign convention, control-volume boundary and numerical result.
+
+If the energy balance cannot be closed because of a modelling limitation or missing equipment stream, explain exactly what is missing.
+
+Do not invent a correction factor.
+
+---
+
+# 12. COP calculation requirements
+
+The final COP must be calculated using:
+
+\[
+COP=\frac{Q_{\mathrm{evaporator}}}
+{Q_{\mathrm{external,generator}}}
+\]
+
+Use consistent heat-duty signs and absolute magnitudes in the reported COP.
+
+The generator heat input must be determined from the correct external generator boundary.
+
+Do not automatically assume:
+
+\[
+Q_{\mathrm{generator}}=Q_{\mathrm{DESAT}}
+\]
+
+Do not automatically assume that adding DESHEAT1 and DESHEAT3 gives the complete external generator heat input either. Verify their physical boundaries and stream enthalpy changes.
+
+Also calculate the thermal COP separately from any electrical or overall system COP if useful.
+
+Pump work is very small in the current idealized model, but it should be reported separately.
+
+Do not manipulate the COP to match a literature benchmark.
+
+A literature benchmark is a validation reference, not a target to force through arbitrary modifications.
+
+---
+
+# 13. Sensitivity analysis history
+
+An earlier proposed SENS-1 used four variables:
+
+| Variable | Block |
+|---|---|
+| Generator temperature | DESAT |
+| Condenser temperature | CONDENS |
+| Absorber temperature | ABSORB |
+| Evaporator temperature | EVAP |
+
+The previously proposed ranges were:
+
+| Variable | Proposed minimum | Nominal | Proposed maximum |
+|---|---:|---:|---:|
+| DESAT | 98°C | 103.5°C | 108°C |
+| CONDENS | 42°C | 44°C | 46°C |
+| ABSORB | 32°C | 35°C | 38°C |
+| EVAP | 1.8°C | 1.8°C | 5°C |
+
+A five-level factorial design would give:
+
+\[
+5^4=625\text{ cases}
+\]
+
+However, these ranges are NOT yet validated.
+
+In particular:
+- Condenser phase behaviour must be checked near 46°C at 10.2 kPa.
+- Absorber outlet must remain physically meaningful.
+- Evaporator outlet must remain vapour.
+- Generator separation and solution concentrations must be reasonable.
+- All mass and energy balances must be checked.
+
+Do not recommend generating the final 625 cases until the nominal model has passed validation.
+
+If the nominal model cannot be physically validated, clearly state this limitation and recommend a defensible alternative for the academic submission.
+
+---
+
+# 14. Attached files — inspect all of them carefully
+
+I will attach:
+
+1. Latest energy dataset Excel.
+2. Complete stream-results Excel.
+3. Latest Aspen Plus flowsheet image.
+4. This master handover prompt.
+
+Treat the actual attachments as the primary source of numerical truth.
+
+### File analysis instructions
+
+For the energy dataset Excel:
+
+- Inspect every worksheet.
+- Identify all columns and their units.
+- Identify nominal and sensitivity cases.
+- Check whether COP is calculated correctly.
+- Recalculate the energy residual independently.
+- Identify incorrect formulas.
+- Check missing values and duplicated rows.
+- Identify negative duties and explain their sign conventions.
+- Determine whether all rows correspond to the same nominal model configuration.
+
+For the stream-results Excel:
+
+- Inspect all worksheets.
+- Identify every stream and component.
+- Check stream temperatures and pressures.
+- Check mass and mole flow rates.
+- Check vapour and liquid phase fractions.
+- Check component balances.
+- Check stream enthalpy flows.
+- Compare the results against the numerical data in this prompt.
+- Identify discrepancies between old and latest simulations.
+
+For the flowsheet image:
+
+- Identify every block and stream.
+- Confirm the flow paths.
+- Identify the cycle break.
+- Understand the solution and refrigerant circuits.
+- Do not infer connections that are not visible.
+
+If attached files contradict the values in this prompt, identify the contradiction and explain which simulation case or source is newer. Do not silently overwrite data.
+
+---
+
+# 15. Required working procedure
+
+Work in the following order.
+
+### Phase A — Understand and audit
+
+1. Read this entire prompt.
+2. Inspect all attachments completely.
+3. Reconstruct the current flowsheet.
+4. Create a block specification table.
+5. Create a stream-results table.
+6. Separate old 40.7°C absorber results from new 35°C results.
+7. Identify missing information.
+
+### Phase B — Thermodynamic validation
+
+1. Check the electrolyte model.
+2. Check pressure levels.
+3. Check condenser phase behaviour.
+4. Check evaporator phase behaviour.
+5. Check absorber phase behaviour.
+6. Check LiBr solution concentrations.
+7. Check the separator.
+8. Check valve enthalpy balances.
+9. Check component mass balances.
+
+### Phase C — Energy-balance audit
+
+1. Define the overall control volume.
+2. Identify external heat inputs.
+3. Identify external heat rejections.
+4. Identify internal heat recovery.
+5. Include pump work.
+6. Reconcile stream enthalpy flows and block duties.
+7. Calculate the overall energy residual.
+8. Explain every significant discrepancy.
+
+### Phase D — Repair strategy
+
+Recommend the smallest possible changes.
+
+For every proposed change, provide:
+
+- Block name.
+- Current specification.
+- Proposed specification.
+- Reason for the change.
+- Expected physical effect.
+- Potential consequences.
+- How to validate the result.
+
+Do not ask me to change multiple parameters simultaneously.
+
+Do not make changes to the flowsheet without explaining why they are necessary.
+
+### Phase E — Final dataset generation
+
+Only after nominal validation:
+
+1. Recommend physically acceptable operating ranges.
+2. Configure Aspen Sensitivity.
+3. Identify independent and dependent variables.
+4. Specify all output variables.
+5. Recommend a suitable factorial or sampling strategy.
+6. Generate a clean dataset.
+7. Define invalid-case filtering criteria.
+8. Prepare a complete data dictionary.
+9. Provide the final Excel structure.
+10. Explain how the dataset will be used for AI/ML modelling.
+
+---
+
+# 16. Communication instructions
+
+I am a Chemical Engineering student. Explain the process in technically correct but understandable language.
+
+Follow these rules:
+
+- Be precise.
+- Give sequential instructions.
+- Use tables wherever helpful.
+- Show numerical calculations.
+- Do not make unsupported assumptions.
+- Do not repeat questions that are already answered in this prompt or attachments.
+- Do not recommend changing parameters without technical justification.
+- Do not give generic textbook explanations when a specific Aspen result needs analysis.
+- Clearly separate actual Aspen results, calculations, assumptions and recommendations.
+- Do not claim a model is validated merely because Aspen converges.
+- If information is missing, identify the exact missing information.
+- Prioritize completing the project correctly and efficiently.
+
+I am working under a tight academic submission deadline. Avoid unnecessary work and focus on the highest-impact corrections.
+
+---
+
+# 17. Your first response must follow this format
+
+Before suggesting any changes, provide:
+
+**A. Current model summary**
+
+Explain the actual flowsheet and operating conditions you understood.
+
+**B. Latest block specification table**
+
+Include every block, its type, known specifications and latest available results.
+
+**C. Latest stream summary**
+
+Summarize temperatures, pressures, flow rates, phases and enthalpy flows.
+
+**D. Problems identified**
+
+List the actual problems supported by the attached files and numerical results.
+
+**E. Energy-balance diagnosis**
+
+Show the correct control-volume approach and explain why the previous spreadsheet balance was incorrect or incomplete.
+
+**F. COP diagnosis**
+
+Show the correct generator heat-input definition and calculate the COP only if the required data are available.
+
+**G. Action plan**
+
+Give the exact next steps, in order, without modifying the flowsheet blindly.
+
+**Do not start by generating a new sensitivity dataset. First audit the existing Aspen model and attachments.**
+
+My objective is to finish with a technically defensible steady-state absorption chiller model and a reliable dataset for my AI Specialisation Project.
